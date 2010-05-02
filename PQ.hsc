@@ -1,5 +1,5 @@
 {-# LANGUAGE ForeignFunctionInterface, EmptyDataDecls #-}
-module PQ (connect, reset)
+module PQ (connect, reset, exec)
 where
 
 import Foreign
@@ -66,12 +66,28 @@ reset conn =
           PollingWriting -> connWaitWrite connPtr resetPoll
 
 
---exec :: ForeignPtr PGconn -> String -> IO (ForeignPtr PGresult)
---exec conn query =
---    withForeignPtr conn $ \connPtr -> do
---      pqSendQuery connPtr query
---      pqFlush connPtr
---      threadWaitRead $ pqSocket connPtr
+exec :: ForeignPtr PGconn -> String -> IO [ForeignPtr PGresult]
+exec conn query =
+    withForeignPtr conn $ \connPtr -> do
+      pqSendQuery connPtr query
+      pqFlush connPtr
+      threadWaitRead $ pqSocket connPtr
+      getResults connPtr []
+
+    where
+      getResults connPtr results = do
+        readData connPtr
+        result <- pqGetResult connPtr
+        case result of
+          Nothing -> return results
+          Just r -> getResults connPtr (r:results)
+
+      readData connPtr = do
+        pqConsumeInput connPtr
+        busy <- pqIsBusy connPtr
+        if busy
+          then connWaitRead connPtr readData
+          else return ()
 
 
 connWaitRead :: Ptr PGconn -> (Ptr PGconn -> IO a) -> IO a
@@ -179,6 +195,15 @@ pqErrorMessage :: Ptr PGconn -> IO String
 pqErrorMessage = peekCString . c_PQerrorMessage
 
 
+pqGetResult :: Ptr PGconn ->IO (Maybe (ForeignPtr PGresult))
+pqGetResult connPtr = do
+  resPtr <- c_PQgetResult connPtr
+  if resPtr == nullPtr
+    then return Nothing
+    else Just `fmap` newForeignPtr c_PQclear resPtr
+
+
+
 foreign import ccall unsafe "libpq-fe.h PQstatus"
     c_PQstatus :: Ptr PGconn -> CInt
 
@@ -201,13 +226,10 @@ foreign import ccall unsafe "libpq-fe.h PQresetPoll"
     c_PQresetPoll :: Ptr PGconn ->IO CInt
 
 foreign import ccall unsafe "libpq-fe.h &PQfinish"
-    c_PQfinish :: FunPtr (Ptr PGconn ->IO ())
+    c_PQfinish :: FunPtr (Ptr PGconn -> IO ())
 
 foreign import ccall unsafe "libpq-fe.h PQsendQuery"
     c_PQsendQuery :: Ptr PGconn -> CString ->IO CInt
-
-foreign import ccall unsafe "libpq-fe.h PQgetResult"
-    c_PQgetResult :: Ptr PGconn ->IO (Ptr PGresult)
 
 foreign import ccall unsafe "libpq-fe.h PQflush"
     c_PQflush :: Ptr PGconn ->IO CInt
@@ -218,6 +240,11 @@ foreign import ccall unsafe "libpq-fe.h PQconsumeInput"
 foreign import ccall unsafe "libpq-fe.h PQisBusy"
     c_PQisBusy :: Ptr PGconn -> IO CInt
 
+foreign import ccall unsafe "libpq-fe.h PQgetResult"
+    c_PQgetResult :: Ptr PGconn ->IO (Ptr PGresult)
+
+foreign import ccall unsafe "libpq-fe.h &PQclear"
+    c_PQclear :: FunPtr (Ptr PGresult ->IO ())
 
 
 
