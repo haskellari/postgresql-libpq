@@ -3,12 +3,14 @@ module Database.PQ ( Connection
                    , ConnStatus(..)
                    , Result
                    , ResultStatus(..)
+                   , Format(..)
 
                    , connectdb
                    , setClientEncoding
                    , consumeInput
                    , errorMessage
                    , exec
+                   , execParams
                    , execPrepared
                    , getResult
                    , isBusy
@@ -16,6 +18,7 @@ module Database.PQ ( Connection
                    , reset
                    , sendPrepare
                    , sendQuery
+                   , sendQueryParams
                    , sendQueryPrepared
                    , status
 
@@ -43,6 +46,7 @@ import Data.List ( foldl' )
 import qualified Data.ByteString.Char8 as Char8
 import qualified Data.ByteString as B
 
+data Format = Text | Binary deriving Enum
 
 -- | 'Connection' encapsulates a connection to the backend.
 newtype Connection = Conn (ForeignPtr PGconn) deriving (Eq, Show)
@@ -172,6 +176,23 @@ exec connection query =
        throwAwaySubsequentResults connection
        return result
 
+
+-- | Submits a command to the server and waits for the result, with
+-- the ability to pass parameters separately from the SQL command
+-- text.
+execParams :: Connection
+           -> B.ByteString
+           -> [Maybe (Oid, B.ByteString, Bool)]
+           -> Format
+           -> IO Result
+execParams conn statement params resultFormat =
+    do sendQueryParams conn statement params resultFormat
+       flush conn
+       Just result <- connWaitRead conn getResult
+       throwAwaySubsequentResults conn
+       return result
+
+
 -- | Submits a request to create a prepared statement with the given
 -- parameters, and waits for completion.
 prepare :: Connection
@@ -187,10 +208,12 @@ prepare connection stmtName query mParamTypes =
        return result
 
 
+-- | Sends a request to execute a prepared statement with given
+-- parameters, and waits for the result.
 execPrepared :: Connection
              -> B.ByteString
              -> [Maybe (B.ByteString, Bool)]
-             -> Bool
+             -> Format
              -> IO Result
 execPrepared connection stmtName mPairs binary_result =
     do sendQueryPrepared connection stmtName mPairs binary_result
@@ -200,33 +223,43 @@ execPrepared connection stmtName mPairs binary_result =
        return result
 
 
--- | Sends a request to execute a prepared statement with given
--- parameters, without waiting for the result(s).
-sendQueryPrepared :: Connection
-                  -> B.ByteString
-                  -> [Maybe (B.ByteString, Bool)]
-                  -> Bool
-                  -> IO ()
-sendQueryPrepared (Conn conn) stmtName mPairs rFmt =
-    do let (values, lengths, formats) = foldl' accum ([],[],[]) $ reverse mPairs
+-- | Submits a command and separate parameters to the server without
+-- waiting for the result(s).
+sendQueryParams :: Connection
+                -> B.ByteString
+                -> [Maybe (Oid, B.ByteString, Bool)]
+                -> Format
+                -> IO ()
+sendQueryParams connection@(Conn conn) statement params rFmt =
+    do let (oids, values, lengths, formats) =
+               foldl' accum ([],[],[],[]) $ reverse params
            c_lengths = map toEnum lengths :: [CInt]
-           n = toEnum $ length mPairs
+           n = toEnum $ length params
+           f = toEnum $ fromEnum rFmt
        stat <- withForeignPtr conn $ \c -> do
-                 B.useAsCString stmtName $ \s -> do
-                   withMany (maybeWith B.useAsCString) values $ \c_values ->
-                     withArray c_values $ \vs -> do
-                       withArray c_lengths $ \ls -> do
-                         withArray formats $ \fs -> do
-                           c_PQsendQueryPrepared c s n vs ls fs (fromBool rFmt)
-
+                 B.useAsCString statement $ \s -> do
+                   withArray oids $ \ts -> do
+                     withMany (maybeWith B.useAsCString) values $ \c_values ->
+                       withArray c_values $ \vs -> do
+                         withArray c_lengths $ \ls -> do
+                           withArray formats $ \fs -> do
+                             c_PQsendQueryParams c s n ts vs ls fs f
 
        case stat of
          1 -> return ()
-         _ -> failErrorMessage (Conn conn)
+         _ -> failErrorMessage connection
 
     where
-      accum (a,b,c) Nothing = (Nothing:a, 0:b, 0:c)
-      accum (a,b,c) (Just (v, f)) = ((Just v):a, (B.length v):b, (fromBool f):c)
+      accum (a,b,c,d) Nothing = ( 0:a
+                                , Nothing:b
+                                , 0:c
+                                , 0:d
+                                )
+      accum (a,b,c,d) (Just (t,v,f)) = ( t:a
+                                       , (Just v):b
+                                       , (B.length v):c
+                                       , (fromBool f):d
+                                       )
 
 
 -- | Sends a request to create a prepared statement with the given
@@ -246,6 +279,36 @@ sendPrepare connection@(Conn conn) stmtName query mParamTypes =
        case stat of
          1 -> return ()
          _ -> failErrorMessage connection
+
+
+-- | Sends a request to execute a prepared statement with given
+-- parameters, without waiting for the result(s).
+sendQueryPrepared :: Connection
+                  -> B.ByteString
+                  -> [Maybe (B.ByteString, Bool)]
+                  -> Format
+                  -> IO ()
+sendQueryPrepared (Conn conn) stmtName mPairs rFmt =
+    do let (values, lengths, formats) = foldl' accum ([],[],[]) $ reverse mPairs
+           c_lengths = map toEnum lengths :: [CInt]
+           n = toEnum $ length mPairs
+           f = toEnum $ fromEnum rFmt
+       stat <- withForeignPtr conn $ \c -> do
+                 B.useAsCString stmtName $ \s -> do
+                   withMany (maybeWith B.useAsCString) values $ \c_values ->
+                     withArray c_values $ \vs -> do
+                       withArray c_lengths $ \ls -> do
+                         withArray formats $ \fs -> do
+                           c_PQsendQueryPrepared c s n vs ls fs f
+
+
+       case stat of
+         1 -> return ()
+         _ -> failErrorMessage (Conn conn)
+
+    where
+      accum (a,b,c) Nothing = (Nothing:a, 0:b, 0:c)
+      accum (a,b,c) (Just (v, f)) = ((Just v):a, (B.length v):b, (fromBool f):c)
 
 
 -- | Helper function to consume and ignore all results available
@@ -519,6 +582,19 @@ foreign import ccall unsafe "libpq-fe.h PQsetClientEncoding"
 foreign import ccall unsafe "libpq-fe.h PQsendQuery"
     c_PQsendQuery :: Ptr PGconn -> CString ->IO CInt
 
+foreign import ccall unsafe "libpq-fe.h PQsendQueryParams"
+    c_PQsendQueryParams :: Ptr PGconn -> CString -> CInt -> Ptr Oid
+                        -> Ptr CString -> Ptr CInt -> Ptr CInt -> CInt
+                        -> IO CInt
+
+foreign import ccall unsafe "libpq-fe.h PQsendPrepare"
+    c_PQsendPrepare :: Ptr PGconn -> CString -> CString -> CInt -> Ptr Oid
+                    -> IO CInt
+
+foreign import ccall unsafe "libpq-fe.h PQsendQueryPrepared"
+    c_PQsendQueryPrepared :: Ptr PGconn -> CString -> CInt -> Ptr CString
+                          -> Ptr CInt -> Ptr CInt -> CInt -> IO CInt
+
 foreign import ccall unsafe "libpq-fe.h PQflush"
     c_PQflush :: Ptr PGconn ->IO CInt
 
@@ -554,11 +630,3 @@ foreign import ccall unsafe "libpq-fe.h PQfnumber"
 
 foreign import ccall unsafe "libpq-fe.h PQbinaryTuples"
     c_PQbinaryTuples :: Ptr PGresult -> IO CInt
-
-foreign import ccall unsafe "libpq-fe.h PQsendPrepare"
-    c_PQsendPrepare :: Ptr PGconn -> CString -> CString -> CInt -> Ptr Oid
-                    -> IO CInt
-
-foreign import ccall unsafe "libpq-fe.h PQsendQueryPrepared"
-    c_PQsendQueryPrepared :: Ptr PGconn -> CString -> CInt -> Ptr CString
-                          -> Ptr CInt -> Ptr CInt -> CInt -> IO CInt
