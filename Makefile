@@ -1,9 +1,9 @@
 
-PQ.o: PQ.hs
-	ghc -c $^
+Database/PQ.o: Database/PQ.hs
+	ghc -Wall -c $^
 
-PQ.hs: PQ.hsc
-	hsc2hs -I /opt/local/include/postgresql83 $^
+Database/PQ.hs: Database/PQ.hsc
+	hsc2hs -I /opt/local/include/postgresql84 $^
 
 
 clean:
