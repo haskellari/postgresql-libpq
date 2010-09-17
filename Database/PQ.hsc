@@ -1,4 +1,4 @@
-{-# LANGUAGE ForeignFunctionInterface, EmptyDataDecls, OverloadedStrings #-}
+{-# LANGUAGE ForeignFunctionInterface, EmptyDataDecls, OverloadedStrings, ScopedTypeVariables #-}
 module Database.PQ ( Connection
                    , ConnStatus(..)
                    , Result
@@ -7,13 +7,16 @@ module Database.PQ ( Connection
                    , connectdb
                    , setClientEncoding
                    , consumeInput
+                   , errorMessage
                    , exec
+                   , execPrepared
                    , getResult
                    , isBusy
                    , prepare
                    , reset
                    , sendPrepare
                    , sendQuery
+                   , sendQueryPrepared
                    , status
 
                    , resultStatus
@@ -21,17 +24,20 @@ module Database.PQ ( Connection
                    , nfields
                    , fname
                    , fnumber
+                   , binaryTuples
                    )
 where
 
 #include <libpq-fe.h>
 
+import Control.Monad ( when )
 import Foreign
 import Foreign.Ptr
 import Foreign.C.Types
 import Foreign.C.String
 import GHC.Conc ( threadWaitRead, threadWaitWrite)
 import System.Posix.Types ( Fd(..) )
+import Data.List ( foldl' )
 
 import qualified Data.ByteString.Char8 as Char8
 import qualified Data.ByteString as B
@@ -181,30 +187,46 @@ prepare connection stmtName query mParamTypes =
        return result
 
 
--- -- execPrepared
-
--- -- | Sends a request to execute a prepared statement with given
--- -- parameters, without waiting for the result(s).
--- sendQueryPrepared :: Connection
---                   -> String
---                   -> [String]
---                   -> IO ()
--- sendQueryPrepared (Conn conn) query params =
---     do stat <- withForeignPtr conn $ \p ->
---                  do
---                  withCString query (c_PQsendQuery p)
---        case stat of
---          1 -> return ()
---          _ -> failErrorMessage (Conn conn)
+execPrepared :: Connection
+             -> B.ByteString
+             -> [Maybe (B.ByteString, Bool)]
+             -> Bool
+             -> IO Result
+execPrepared connection stmtName mPairs binary_result =
+    do sendQueryPrepared connection stmtName mPairs binary_result
+       flush connection
+       Just result <- connWaitRead connection getResult
+       throwAwaySubsequentResults connection
+       return result
 
 
---         int PQsendQueryPrepared(PGconn *conn,
---                                 const char *stmtName,
---                                 int nParams,
---                                 const char * const *paramValues,
---                                 const int *paramLengths,
---                                 const int *paramFormats,
---                                 int resultFormat);
+-- | Sends a request to execute a prepared statement with given
+-- parameters, without waiting for the result(s).
+sendQueryPrepared :: Connection
+                  -> B.ByteString
+                  -> [Maybe (B.ByteString, Bool)]
+                  -> Bool
+                  -> IO ()
+sendQueryPrepared (Conn conn) stmtName mPairs rFmt =
+    do let (values, lengths, formats) = foldl' accum ([],[],[]) $ reverse mPairs
+           c_lengths = map toEnum lengths :: [CInt]
+           n = toEnum $ length mPairs
+       stat <- withForeignPtr conn $ \c -> do
+                 B.useAsCString stmtName $ \s -> do
+                   withMany (maybeWith B.useAsCString) values $ \c_values ->
+                     withArray c_values $ \vs -> do
+                       withArray c_lengths $ \ls -> do
+                         withArray formats $ \fs -> do
+                           c_PQsendQueryPrepared c s n vs ls fs (fromBool rFmt)
+
+
+       case stat of
+         1 -> return ()
+         _ -> failErrorMessage (Conn conn)
+
+    where
+      accum (a,b,c) Nothing = (Nothing:a, 0:b, 0:c)
+      accum (a,b,c) (Just (v, f)) = ((Just v):a, (B.length v):b, (fromBool f):c)
 
 
 -- | Sends a request to create a prepared statement with the given
@@ -218,9 +240,9 @@ sendPrepare connection@(Conn conn) stmtName query mParamTypes =
     do stat <- withForeignPtr conn $ \c -> do
                  B.useAsCString stmtName $ \s -> do
                    B.useAsCString query $ \q -> do
-                     o <- maybe (return nullPtr) newArray mParamTypes
-                     let l = maybe 0 (toEnum . length) mParamTypes
-                     c_PQsendPrepare c s q l o
+                     maybeWith withArray mParamTypes $ \o -> do
+                       let l = maybe 0 (toEnum . length) mParamTypes
+                       c_PQsendPrepare c s q l o
        case stat of
          1 -> return ()
          _ -> failErrorMessage connection
@@ -383,9 +405,11 @@ data ResultStatus = EmptyQuery
                   | NonfatalError
                   | FatalError deriving Show
 
-resultStatus :: Result -> ResultStatus
+
+-- | Returns the result status of the command.
+resultStatus :: Result
+             -> IO ResultStatus
 resultStatus (Result res) =
-    unsafePerformIO $ do
       withForeignPtr res $ \resPtr -> do
           case c_PQresultStatus resPtr of
             (#const PGRES_EMPTY_QUERY)    -> return EmptyQuery
@@ -399,29 +423,44 @@ resultStatus (Result res) =
             s -> fail $ "Unexpected result from PQresultStatus" ++ show s
 
 
-ntuples :: Result -> Int
-ntuples (Result res) =
-    unsafePerformIO $ withForeignPtr res (return . fromEnum . c_PQntuples)
+-- | Returns the number of rows (tuples) in the query result. Because
+-- it returns an integer result, large result sets might overflow the
+-- return value on 32-bit operating systems.
+ntuples :: Result
+        -> IO Int
+ntuples (Result res) = withForeignPtr res (return . fromEnum . c_PQntuples)
 
-nfields :: Result -> Int
-nfields (Result res) =
-    unsafePerformIO $ withForeignPtr res (return . fromEnum . c_PQnfields)
 
-fname :: Result -> Int -> IO B.ByteString
-fname result@(Result res) columnNumber
-    | columnNumber < 0 || columnNumber >= nfields result = failure
-    | otherwise =
-        do cs <- withForeignPtr res $ (flip c_PQfname) $ toEnum columnNumber
-           if cs == nullPtr
-              then failure
-              else B.packCString cs
+-- | Returns the number of columns (fields) in each row of the query
+-- result.
+nfields :: Result
+        -> IO Int
+nfields (Result res) = withForeignPtr res (return . fromEnum . c_PQnfields)
+
+
+-- | Returns the column name associated with the given column
+-- number. Column numbers start at 0.
+fname :: Result
+      -> Int
+      -> IO B.ByteString
+fname result@(Result res) colNum =
+      do nf <- nfields result
+         when (colNum < 0 || colNum >= nf) (failure nf)
+         cs <- withForeignPtr res $ (flip c_PQfname) $ toEnum colNum
+         if cs == nullPtr
+           then failure nf
+           else B.packCString cs
     where
-      failure = fail ("column number " ++
-                      show columnNumber ++
-                      " is out of range 0.." ++
-                      show (nfields result - 1))
+      failure nf = fail ("column number " ++
+                         show colNum ++
+                         " is out of range 0.." ++
+                         show (nf - 1))
 
-fnumber :: Result -> B.ByteString -> IO (Maybe Int)
+
+-- | Returns the column number associated with the given column name.
+fnumber :: Result
+        -> B.ByteString
+        -> IO (Maybe Int)
 fnumber (Result res) columnName =
     do num <- withForeignPtr res $ \resPtr -> do
                 B.useAsCString columnName $ \cColumnName -> do
@@ -429,6 +468,13 @@ fnumber (Result res) columnName =
        return $ if num == -1
                   then Nothing
                   else Just $ fromIntegral num
+
+
+-- | Returns True if the Result contains binary data and False if it
+-- contains text data.
+binaryTuples :: Result
+             -> IO Bool
+binaryTuples (Result res) = toBool `fmap` withForeignPtr res c_PQbinaryTuples
 
 
 type Oid = CUInt
@@ -493,11 +539,13 @@ foreign import ccall unsafe "libpq-fe.h PQfname"
 foreign import ccall unsafe "libpq-fe.h PQfnumber"
     c_PQfnumber :: Ptr PGresult -> CString -> IO CInt
 
+foreign import ccall unsafe "libpq-fe.h PQbinaryTuples"
+    c_PQbinaryTuples :: Ptr PGresult -> IO CInt
+
 foreign import ccall unsafe "libpq-fe.h PQsendPrepare"
     c_PQsendPrepare :: Ptr PGconn -> CString -> CString -> CInt -> Ptr Oid
                     -> IO CInt
 
-
--- foreign import ccall unsafe "libpq-fe.h PQsendQueryPrepared"
---     c_PQsendQueryPrepared :: Ptr PGconn -> CString -> CInt -> Ptr CString
---                           -> Ptr CInt -> Ptr CInt -> IO CInt
+foreign import ccall unsafe "libpq-fe.h PQsendQueryPrepared"
+    c_PQsendQueryPrepared :: Ptr PGconn -> CString -> CInt -> Ptr CString
+                          -> Ptr CInt -> Ptr CInt -> CInt -> IO CInt
