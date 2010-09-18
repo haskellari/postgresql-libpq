@@ -121,7 +121,7 @@ status (Conn conn) =
             c                                    -> ConnectionOther $ fromEnum c
 
 -- | Makes a new connection to the database server.
-connectdb :: String -- ^ Connection info
+connectdb :: B.ByteString -- ^ Connection info
           -> IO Connection
 connectdb connStr =
     do conn <- connectStart connStr
@@ -350,10 +350,10 @@ connWaitWrite conn ioa =
        ioa conn
 
 
-connectStart :: String
+connectStart :: B.ByteString
              -> IO Connection
 connectStart connStr =
-    do connPtr <- withCString connStr c_PQconnectStart
+    do connPtr <- B.useAsCString connStr c_PQconnectStart
        if connPtr == nullPtr
            then fail $ "PQconnectStart failed to allocate memory"
            else Conn `fmap` newForeignPtr c_PQfinish connPtr
