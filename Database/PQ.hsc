@@ -28,6 +28,7 @@ module Database.PQ ( Connection
                    , nfields
                    , fname
                    , fnumber
+                   , ftable
                    , binaryTuples
                    )
 where
@@ -539,6 +540,16 @@ fnumber (Result res) columnName =
                   else Just $ fromIntegral num
 
 
+-- | Returns the OID of the table from which the given column was
+-- fetched. Column numbers start at 0.
+ftable :: Result
+       -> Int
+       -> IO Oid
+ftable (Result res) columnNumber =
+    withForeignPtr res $ \ptr -> do
+      c_PQftable ptr (toEnum columnNumber)
+
+
 -- | Returns True if the Result contains binary data and False if it
 -- contains text data.
 binaryTuples :: Result
@@ -633,6 +644,9 @@ foreign import ccall unsafe "libpq-fe.h PQfname"
 
 foreign import ccall unsafe "libpq-fe.h PQfnumber"
     c_PQfnumber :: Ptr PGresult -> CString -> IO CInt
+
+foreign import ccall unsafe "libpq-fe.h PQftable"
+    c_PQftable :: Ptr PGresult -> CInt -> IO Oid
 
 foreign import ccall unsafe "libpq-fe.h PQbinaryTuples"
     c_PQbinaryTuples :: Ptr PGresult -> IO CInt
