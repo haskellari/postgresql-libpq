@@ -182,7 +182,7 @@ exec connection query =
 -- text.
 execParams :: Connection
            -> B.ByteString
-           -> [Maybe (Oid, B.ByteString, Bool)]
+           -> [Maybe (Oid, B.ByteString, Format)]
            -> Format
            -> IO Result
 execParams conn statement params resultFormat =
@@ -212,7 +212,7 @@ prepare connection stmtName query mParamTypes =
 -- parameters, and waits for the result.
 execPrepared :: Connection
              -> B.ByteString
-             -> [Maybe (B.ByteString, Bool)]
+             -> [Maybe (B.ByteString, Format)]
              -> Format
              -> IO Result
 execPrepared connection stmtName mPairs binary_result =
@@ -227,7 +227,7 @@ execPrepared connection stmtName mPairs binary_result =
 -- waiting for the result(s).
 sendQueryParams :: Connection
                 -> B.ByteString
-                -> [Maybe (Oid, B.ByteString, Bool)]
+                -> [Maybe (Oid, B.ByteString, Format)]
                 -> Format
                 -> IO ()
 sendQueryParams connection@(Conn conn) statement params rFmt =
@@ -258,7 +258,7 @@ sendQueryParams connection@(Conn conn) statement params rFmt =
       accum (a,b,c,d) (Just (t,v,f)) = ( t:a
                                        , (Just v):b
                                        , (B.length v):c
-                                       , (fromBool f):d
+                                       , (toEnum $ fromEnum f):d
                                        )
 
 
@@ -285,7 +285,7 @@ sendPrepare connection@(Conn conn) stmtName query mParamTypes =
 -- parameters, without waiting for the result(s).
 sendQueryPrepared :: Connection
                   -> B.ByteString
-                  -> [Maybe (B.ByteString, Bool)]
+                  -> [Maybe (B.ByteString, Format)]
                   -> Format
                   -> IO ()
 sendQueryPrepared (Conn conn) stmtName mPairs rFmt =
@@ -307,8 +307,14 @@ sendQueryPrepared (Conn conn) stmtName mPairs rFmt =
          _ -> failErrorMessage (Conn conn)
 
     where
-      accum (a,b,c) Nothing = (Nothing:a, 0:b, 0:c)
-      accum (a,b,c) (Just (v, f)) = ((Just v):a, (B.length v):b, (fromBool f):c)
+      accum (a,b,c) Nothing       = ( Nothing:a
+                                    , 0:b
+                                    , 0:c
+                                    )
+      accum (a,b,c) (Just (v, f)) = ( (Just v):a
+                                    , (B.length v):b
+                                    , (toEnum $ fromEnum f):c
+                                    )
 
 
 -- | Helper function to consume and ignore all results available
