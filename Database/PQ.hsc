@@ -4,11 +4,14 @@ module Database.PQ ( Connection
                    , Result
                    , ResultStatus(..)
                    , Format(..)
+                   , PrintOpt(..)
 
                    , connectdb
                    , setClientEncoding
                    , consumeInput
                    , errorMessage
+                   , escapeByteaConn
+                   , escapeStringConn
                    , exec
                    , execParams
                    , execPrepared
@@ -30,12 +33,20 @@ module Database.PQ ( Connection
                    , fnumber
                    , ftable
                    , ftablecol
-                   , binaryTuples
+                   , fformat
+                   , ftype
+                   , fmod
+                   , fsize
+                   , getvalue
+                   , getisnull
+                   , getlength
+                   , print
                    )
 where
 
 #include <libpq-fe.h>
 
+import Prelude hiding ( print )
 import Control.Monad ( when )
 import Foreign
 import Foreign.Ptr
@@ -44,8 +55,13 @@ import Foreign.C.String
 import GHC.Conc ( threadWaitRead, threadWaitWrite)
 import System.Posix.Types ( Fd(..) )
 import Data.List ( foldl' )
+import System.IO ( Handle )
+import GHC.Handle ( hDuplicate )
+import System.Posix.IO ( handleToFd )
 
 import qualified Data.ByteString.Char8 as Char8
+import qualified Data.ByteString.Unsafe as B
+import qualified Data.ByteString.Internal as B (fromForeignPtr)
 import qualified Data.ByteString as B
 
 data Format = Text | Binary deriving Enum
@@ -80,12 +96,54 @@ errorMessage (Conn conn) =
     B.packCString =<< withForeignPtr conn c_PQerrorMessage
 
 
+-- | Escapes a string for use within an SQL command. This is useful
+-- when inserting data values as literal constants in SQL
+-- commands. Certain characters (such as quotes and backslashes) must
+-- be escaped to prevent them from being interpreted specially by the
+-- SQL parser.
+escapeStringConn :: Connection
+                 -> B.ByteString
+                 -> IO B.ByteString
+escapeStringConn connection@(Conn c) bs =
+    withForeignPtr c $ \conn -> do
+      B.unsafeUseAsCStringLen bs $ \(from, bslen) -> do
+        alloca $ \err -> do
+          to <- mallocBytes (bslen*2+1)
+          num <- c_PQescapeStringConn conn to from (fromIntegral bslen) err
+          stat <- peek err
+          case stat of
+            0 -> do tofp <- newForeignPtr finalizerFree to
+                    return $ B.fromForeignPtr tofp 0 (fromIntegral num)
+
+            _ -> do free to
+                    failErrorMessage connection
+
+
+-- | Escapes binary data for use within an SQL command with the type
+-- bytea. As with 'escapeStringConn', this is only used when inserting
+-- data directly into an SQL command string.
+escapeByteaConn :: Connection
+                -> B.ByteString
+                -> IO B.ByteString
+escapeByteaConn connection@(Conn c) bs =
+    withForeignPtr c $ \conn -> do
+      B.unsafeUseAsCStringLen bs $ \(from, bslen) -> do
+        alloca $ \to_length -> do
+          to <- c_PQescapeByteaConn conn from (fromIntegral bslen) to_length
+          if to == nullPtr
+            then failErrorMessage connection
+            else do tofp <- newForeignPtr p_PQfreemem to
+                    l <- peek to_length
+                    return $ B.fromForeignPtr tofp 0 ((fromIntegral l) - 1)
+
+
 -- | Helper function that calls fail with the result of errorMessage
 failErrorMessage :: Connection
                  -> IO a
 failErrorMessage conn =
     do msg <- errorMessage conn
        fail $ Char8.unpack msg
+
 
 data ConnStatus
     = ConnectionOk                 -- ^ The 'Connection' is ready.
@@ -121,6 +179,7 @@ status (Conn conn) =
             (#const CONNECTION_SSL_STARTUP)      -> ConnectionSSLStartup
             --(#const CONNECTION_NEEDED)           -> ConnectionNeeded
             c                                    -> ConnectionOther $ fromEnum c
+
 
 -- | Makes a new connection to the database server.
 connectdb :: B.ByteString -- ^ Connection info
@@ -364,7 +423,7 @@ connectStart connStr =
     do connPtr <- B.useAsCString connStr c_PQconnectStart
        if connPtr == nullPtr
            then fail $ "PQconnectStart failed to allocate memory"
-           else Conn `fmap` newForeignPtr c_PQfinish connPtr
+           else Conn `fmap` newForeignPtr p_PQfinish connPtr
 
 
 data PollingStatus
@@ -464,7 +523,7 @@ getResult (Conn conn) =
     do resPtr <- withForeignPtr conn c_PQgetResult
        if resPtr == nullPtr
            then return Nothing
-           else (Just . Result) `fmap` newForeignPtr c_PQclear resPtr
+           else (Just . Result) `fmap` newForeignPtr p_PQclear resPtr
 
 
 data ResultStatus = EmptyQuery
@@ -548,7 +607,7 @@ ftable :: Result
        -> IO Oid
 ftable (Result res) columnNumber =
     withForeignPtr res $ \ptr -> do
-      c_PQftable ptr (toEnum columnNumber)
+      c_PQftable ptr $ fromIntegral columnNumber
 
 
 -- | Returns the column number (within its table) of the column making
@@ -559,14 +618,197 @@ ftablecol :: Result
           -> IO Int
 ftablecol (Result res) columnNumber =
     fmap fromIntegral $ withForeignPtr res $ \ptr -> do
-      c_PQftablecol ptr (toEnum columnNumber)
+      c_PQftablecol ptr $ fromIntegral columnNumber
 
 
--- | Returns True if the Result contains binary data and False if it
--- contains text data.
-binaryTuples :: Result
-             -> IO Bool
-binaryTuples (Result res) = toBool `fmap` withForeignPtr res c_PQbinaryTuples
+-- | Returns the 'Format' of the given column. Column numbers start at
+-- 0.
+fformat :: Result
+        -> Int
+        -> IO Format
+fformat (Result res) columnNumber =
+    fmap (toEnum . fromIntegral) $ withForeignPtr res $ \ptr -> do
+      c_PQfformat ptr $ fromIntegral columnNumber
+
+
+-- | Returns the data type associated with the given column
+-- number. The 'Oid' returned is the internal OID number of the
+-- type. Column numbers start at 0.
+--
+-- You can query the system table pg_type to obtain the names and
+-- properties of the various data types. The OIDs of the built-in data
+-- types are defined in the file src/include/catalog/pg_type.h in the
+-- source tree.
+ftype :: Result
+      -> Int
+      -> IO Oid
+ftype (Result res) columnNumber =
+    withForeignPtr res $ \ptr -> do
+      c_PQftype ptr $ fromIntegral columnNumber
+
+
+-- | Returns the type modifier of the column associated with the given
+-- column number. Column numbers start at 0.
+--
+-- The interpretation of modifier values is type-specific; they
+-- typically indicate precision or size limits. The value -1 is used
+-- to indicate "no information available". Most data types do not use
+-- modifiers, in which case the value is always -1.
+fmod :: Result
+     -> Int
+     -> IO Int
+fmod (Result res) columnNumber =
+    fmap fromIntegral $ withForeignPtr res $ \ptr -> do
+      c_PQfmod ptr $ fromIntegral columnNumber
+
+
+-- | Returns the size in bytes of the column associated with the given
+-- column number. Column numbers start at 0.
+--
+-- 'fsize' returns the space allocated for this column in a database
+-- row, in other words the size of the server's internal
+-- representation of the data type. (Accordingly, it is not really
+-- very useful to clients.) A negative value indicates the data type
+-- is variable-length.
+fsize :: Result
+      -> Int
+      -> IO Int
+fsize (Result res) columnNumber =
+    fmap fromIntegral $ withForeignPtr res $ \ptr -> do
+      c_PQfsize ptr $ fromIntegral columnNumber
+
+
+-- | Returns a single field value of one row of a PGresult. Row and
+-- column numbers start at 0.
+--
+-- For convenience, this binding uses 'getisnull' and 'getlength' to
+-- help construct the result.
+getvalue :: Result
+         -> Int
+         -> Int
+         -> IO (Maybe B.ByteString)
+getvalue (Result res) rowNumber columnNumber = do
+  let row = fromIntegral rowNumber
+      col = fromIntegral columnNumber
+  withForeignPtr res $ \ptr -> do
+    isnull <- c_PQgetisnull ptr row col
+    if toEnum $ fromIntegral isnull
+      then return $ Nothing
+
+      else do cstr <- c_PQgetvalue ptr row col
+              len <- c_PQgetlength ptr row col
+              fmap Just $ B.packCStringLen (cstr, fromIntegral len)
+
+
+-- | Tests a field for a null value. Row and column numbers start at
+-- 0.
+getisnull :: Result
+          -> Int
+          -> Int
+          -> IO Bool
+getisnull (Result res) rowNumber columnNumber =
+    fmap (toEnum . fromIntegral) $ withForeignPtr res $ \ptr -> do
+      c_PQgetisnull ptr (fromIntegral rowNumber) (fromIntegral columnNumber)
+
+
+-- | Returns the actual length of a field value in bytes. Row and
+-- column numbers start at 0.
+--
+-- This is the actual data length for the particular data value, that
+-- is, the size of the object pointed to by 'getvalue'. For text data
+-- format this is the same as strlen(). For binary format this is
+-- essential information. Note that one should not rely on 'fsize' to
+-- obtain the actual data length.
+getlength :: Result
+          -> Int
+          -> Int
+          -> IO Int
+getlength (Result res) rowNumber columnNumber =
+    fmap fromIntegral $ withForeignPtr res $ \ptr -> do
+      c_PQgetlength ptr (fromIntegral rowNumber) (fromIntegral columnNumber)
+
+
+data PrintOpt = PrintOpt {
+      poHeader     :: Bool -- ^ print output field headings and row count
+    , poAlign      :: Bool -- ^ fill align the fields
+    , poStandard   :: Bool -- ^ old brain dead format
+    , poHtml3      :: Bool -- ^ output HTML tables
+    , poExpanded   :: Bool -- ^ expand tables
+    , poPager      :: Bool -- ^ use pager for output if needed
+    , poFieldSep   :: B.ByteString   -- ^ field separator
+    , poTableOpt   :: B.ByteString   -- ^ attributes for HTML table element
+    , poCaption    :: B.ByteString   -- ^ HTML table caption
+    , poFieldName  :: [B.ByteString] -- ^ list of replacement field names
+    }
+
+
+#let alignment t = "%lu", (unsigned long)offsetof(struct {char x__; t (y__); }, y__)
+instance Storable PrintOpt where
+  sizeOf _ = #{size PQprintOpt}
+
+  alignment _ = #{alignment PQprintOpt}
+
+  peek ptr = do
+      a <- fmap pqbool $ #{peek PQprintOpt, header  } ptr
+      b <- fmap pqbool $ #{peek PQprintOpt, align   } ptr
+      c <- fmap pqbool $ #{peek PQprintOpt, standard} ptr
+      d <- fmap pqbool $ #{peek PQprintOpt, html3   } ptr
+      e <- fmap pqbool $ #{peek PQprintOpt, expanded} ptr
+      f <- fmap pqbool $ #{peek PQprintOpt, pager   } ptr
+      g <- B.packCString =<< #{peek PQprintOpt, fieldSep} ptr
+      h <- B.packCString =<< #{peek PQprintOpt, tableOpt} ptr
+      i <- B.packCString =<< #{peek PQprintOpt, caption} ptr
+      j <- #{peek PQprintOpt, fieldName} ptr
+      j' <- peekArray0 nullPtr j
+      j'' <- mapM B.packCString j'
+      return $ PrintOpt a b c d e f g h i j''
+      where
+        pqbool :: CChar -> Bool
+        pqbool = toEnum . fromIntegral
+
+  poke ptr (PrintOpt a b c d e f g h i j) =
+      B.useAsCString g $ \g' -> do
+        B.useAsCString h $ \h' -> do
+          B.useAsCString i $ \i' -> do
+            withMany B.useAsCString j $ \j' ->
+              withArray0 nullPtr j' $ \j'' -> do
+                let a' = (fromIntegral $ fromEnum a)::CChar
+                    b' = (fromIntegral $ fromEnum b)::CChar
+                    c' = (fromIntegral $ fromEnum c)::CChar
+                    d' = (fromIntegral $ fromEnum d)::CChar
+                    e' = (fromIntegral $ fromEnum e)::CChar
+                    f' = (fromIntegral $ fromEnum f)::CChar
+                #{poke PQprintOpt, header}    ptr a'
+                #{poke PQprintOpt, align}     ptr b'
+                #{poke PQprintOpt, standard}  ptr c'
+                #{poke PQprintOpt, html3}     ptr d'
+                #{poke PQprintOpt, expanded}  ptr e'
+                #{poke PQprintOpt, pager}     ptr f'
+                #{poke PQprintOpt, fieldSep}  ptr g'
+                #{poke PQprintOpt, tableOpt}  ptr h'
+                #{poke PQprintOpt, caption}   ptr i'
+                #{poke PQprintOpt, fieldName} ptr j''
+
+
+-- | Prints out all the rows and, optionally, the column names to the
+-- specified output stream.
+--
+-- This function was formerly used by psql to print query results, but
+-- this is no longer the case. Note that it assumes all the data is in
+-- text format.
+print :: Handle
+      -> Result
+      -> PrintOpt
+      -> IO ()
+print h (Result res) po =
+    withForeignPtr res $ \resPtr -> do
+      B.useAsCString "w" $ \mode -> do
+        with po $ \poPtr -> do
+          dup_h <- hDuplicate h
+          fd <- handleToFd dup_h
+          threadWaitWrite fd
+          cfile <- c_fdopen (fromIntegral fd) mode
+          c_PQprint cfile resPtr poPtr
 
 
 -- | Returns the error message most recently generated by an operation
@@ -575,7 +817,6 @@ resultErrorMessage :: Result
                    -> IO B.ByteString
 resultErrorMessage (Result res) =
     B.packCString =<< withForeignPtr res c_PQresultErrorMessage
-
 
 
 type Oid = CUInt
@@ -602,7 +843,7 @@ foreign import ccall unsafe "libpq-fe.h PQresetPoll"
     c_PQresetPoll :: Ptr PGconn ->IO CInt
 
 foreign import ccall unsafe "libpq-fe.h &PQfinish"
-    c_PQfinish :: FunPtr (Ptr PGconn -> IO ())
+    p_PQfinish :: FunPtr (Ptr PGconn -> IO ())
 
 foreign import ccall unsafe "libpq-fe.h PQsetClientEncoding"
     c_PQsetClientEncoding :: Ptr PGconn -> CString -> IO CInt
@@ -636,7 +877,7 @@ foreign import ccall unsafe "libpq-fe.h PQgetResult"
     c_PQgetResult :: Ptr PGconn ->IO (Ptr PGresult)
 
 foreign import ccall unsafe "libpq-fe.h &PQclear"
-    c_PQclear :: FunPtr (Ptr PGresult ->IO ())
+    p_PQclear :: FunPtr (Ptr PGresult ->IO ())
 
 foreign import ccall unsafe "libpq-fe.h PQresultStatus"
     c_PQresultStatus :: Ptr PGresult -> CInt
@@ -662,5 +903,47 @@ foreign import ccall unsafe "libpq-fe.h PQftable"
 foreign import ccall unsafe "libpq-fe.h PQftablecol"
     c_PQftablecol :: Ptr PGresult -> CInt -> IO CInt
 
-foreign import ccall unsafe "libpq-fe.h PQbinaryTuples"
-    c_PQbinaryTuples :: Ptr PGresult -> IO CInt
+foreign import ccall unsafe "libpq-fe.h PQfformat"
+    c_PQfformat :: Ptr PGresult -> CInt -> IO CInt
+
+foreign import ccall unsafe "libpq-fe.h PQftype"
+    c_PQftype :: Ptr PGresult -> CInt -> IO Oid
+
+foreign import ccall unsafe "libpq-fe.h PQfmod"
+    c_PQfmod :: Ptr PGresult -> CInt -> IO CInt
+
+foreign import ccall unsafe "libpq-fe.h PQfsize"
+    c_PQfsize :: Ptr PGresult -> CInt -> IO CInt
+
+foreign import ccall unsafe "libpq-fe.h PQgetvalue"
+    c_PQgetvalue :: Ptr PGresult -> CInt -> CInt -> IO CString
+
+foreign import ccall unsafe "libpq-fe.h PQgetisnull"
+    c_PQgetisnull :: Ptr PGresult -> CInt -> CInt -> IO CInt
+
+foreign import ccall unsafe "libpq-fe.h PQgetlength"
+    c_PQgetlength :: Ptr PGresult -> CInt -> CInt -> IO CInt
+
+foreign import ccall unsafe "stdio.h fdopen"
+    c_fdopen :: CInt -> CString -> IO (Ptr CFile)
+
+foreign import ccall unsafe "libpq-fe.h PQprint"
+    c_PQprint :: Ptr CFile -> Ptr PGresult -> Ptr PrintOpt -> IO ()
+
+foreign import ccall unsafe "libpq-fe.h PQescapeStringConn"
+    c_PQescapeStringConn :: Ptr PGconn
+                         -> Ptr Word8 -- Actually (CString)
+                         -> CString
+                         -> CSize
+                         -> Ptr CInt
+                         -> IO CSize
+
+foreign import ccall unsafe "libpq-fe.h PQescapeByteaConn"
+    c_PQescapeByteaConn :: Ptr PGconn
+                        -> CString -- Actually (Ptr CUChar)
+                        -> CSize
+                        -> Ptr CSize
+                        -> IO (Ptr Word8) -- Actually (IO (Ptr CUChar))
+
+foreign import ccall unsafe "libpq-fe.h &PQfreemem"
+    p_PQfreemem :: FunPtr (Ptr a -> IO ())
