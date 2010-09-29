@@ -255,15 +255,19 @@ status (Conn conn) =
 
 
 -- | Makes a new connection to the database server.
+--
+-- This function opens a new database connection using the parameters
+-- taken from the string 'conninfo'.
 connectdb :: B.ByteString -- ^ Connection info
-          -> IO (Maybe Connection)
-connectdb connStr =
-    do mconn <- connectStart connStr
-       case mconn of
-         Nothing -> return Nothing
-         Just conn -> do setnonblocking conn True
-                         connWaitWrite conn poll
-                         return $ Just conn
+          -> IO Connection
+connectdb conninfo =
+    do conn <- connectStart conninfo
+       stat <- status conn
+       case stat of
+         ConnectionBad -> return conn
+         _ -> do setnonblocking conn True
+                 connWaitWrite conn poll
+                 return conn
     where
       poll conn =
           do stat <- connectPoll conn
@@ -274,12 +278,17 @@ connectdb connStr =
 
 
 -- | Resets the communication channel to the server.
+--
+-- This function will close the connection to the server and attempt
+-- to reestablish a new connection to the same server, using all the
+-- same parameters previously used. This might be useful for error
+-- recovery if a working connection is lost.
 reset :: Connection
       -> IO ()
 reset connection =
     do started <- resetStart connection
        if started
-         then poll connection
+         then connWaitWrite connection poll
          else return ()
     where
       poll _ =
@@ -499,12 +508,12 @@ connWaitWrite conn ioa =
 
 -- | Make a connection to the database server in a nonblocking manner.
 connectStart :: B.ByteString -- ^ Connection Info
-             -> IO (Maybe Connection)
+             -> IO Connection
 connectStart connStr =
     do connPtr <- B.useAsCString connStr c_PQconnectStart
        if connPtr == nullPtr
-           then return Nothing
-           else (Just . Conn) `fmap` newForeignPtr p_PQfinish connPtr
+           then fail "libpq failed to allocate a PGconn structure"
+           else Conn `fmap` newForeignPtr p_PQfinish connPtr
 
 
 -- | If 'connectStart' succeeds, the next stage is to poll libpq so
