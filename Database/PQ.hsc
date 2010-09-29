@@ -262,7 +262,7 @@ connectdb connStr =
        case mconn of
          Nothing -> return Nothing
          Just conn -> do setnonblocking conn True
-                         poll conn
+                         connWaitWrite conn poll
                          return $ Just conn
     where
       poll conn =
@@ -507,6 +507,24 @@ connectStart connStr =
            else (Just . Conn) `fmap` newForeignPtr p_PQfinish connPtr
 
 
+-- | If 'connectStart' succeeds, the next stage is to poll libpq so
+-- that it can proceed with the connection sequence. Use 'socket' to
+-- obtain the 'Fd' of the socket underlying the database
+-- connection. Loop thus: If 'connectPoll' last returned
+-- 'PollingReading', wait until the socket is ready to read (as
+-- indicated by select(), poll(), or similar system function). Then
+-- call 'connectPoll' again. Conversely, if 'connectPoll' last
+-- returned 'PollingWriting', wait until the socket is ready to write,
+-- then call 'connectPoll' again. If you have yet to call
+-- 'connectPoll', i.e., just after the call to 'connectStart', behave
+-- as if it last returned 'PollingWriting'. Continue this loop until
+-- 'connectPoll' returns 'PollingFailed', indicating the connection
+-- procedure has failed, or 'PollingOk', indicating the connection has
+-- been successfully made.
+connectPoll :: Connection
+            -> IO PollingStatus
+connectPoll = pollHelper c_PQconnectPoll
+
 
 -- | Reset the communication channel to the server, in a nonblocking manner.
 resetStart :: Connection
@@ -515,22 +533,15 @@ resetStart (Conn conn) =
     (toEnum . fromIntegral) `fmap` withForeignPtr conn c_PQresetStart
 
 
+resetPoll :: Connection
+          -> IO PollingStatus
+resetPoll = pollHelper c_PQresetPoll
+
 data PollingStatus
     = PollingFailed
     | PollingReading
     | PollingWriting
     | PollingOk deriving Show
-
-
-connectPoll :: Connection
-            -> IO PollingStatus
-connectPoll = pollHelper c_PQconnectPoll
-
-
-resetPoll :: Connection
-          -> IO PollingStatus
-resetPoll = pollHelper c_PQresetPoll
-
 
 pollHelper :: (Ptr PGconn -> IO CInt)
            -> Connection
