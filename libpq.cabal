@@ -1,0 +1,30 @@
+Name:                libpq
+Version:             0.1
+Synopsis:            libpq binding for Haskell
+
+Description:         This binding uses the libpq asynchronous API in
+                     combination with threadWaitRead and
+                     threadWaitWrite to take advantage of the I/O
+                     manager.
+
+Homepage:            http://github.com/tnarg/haskell-libpq
+License:             BSD3
+License-file:        LICENSE
+Author:              Grant Monroe
+Maintainer:          grant@tnarg.com
+-- Copyright:
+Category:            Database
+Build-type:          Simple
+-- Extra-source-files:
+Cabal-version:       >=1.2
+Library
+  Exposed-modules:     Database.PQ
+
+  Build-depends:       base >= 4 && < 5
+                     , bytestring
+                     , unix
+
+  GHC-Options:       -Wall -Werror
+  Extra-Libraries:   pq
+  -- Other-modules:
+  Build-tools:       hsc2hs
