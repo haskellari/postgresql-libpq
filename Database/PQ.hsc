@@ -29,15 +29,16 @@ module Database.PQ
     , options
     , ConnStatus(..)
     , status
-    --, transactionStatus
-    --, parameterStatus
-    --, protocolVersion
-    --, serverVersion
+    , TransactionStatus(..)
+    , transactionStatus
+    , parameterStatus
+    , protocolVersion
+    , serverVersion
     , errorMessage
     , socket
     , backendPID
-    --, connectionNeedsPassword
-    --, connectionUsedPassword
+    , connectionNeedsPassword
+    , connectionUsedPassword
     --, getssl
 
 
@@ -102,6 +103,7 @@ module Database.PQ
     , isBusy
     , setnonblocking
     , isnonblocking
+    , FlushStatus(..)
     , flush
 
     -- * Control Functions
@@ -148,17 +150,6 @@ data PGconn
 -- 'Result'.
 newtype Result = Result (ForeignPtr PGresult) deriving (Eq, Show)
 data PGresult
-
-
--- | Obtains the file descriptor number of the connection socket to
--- the server.
-socket :: Connection
-       -> IO (Maybe Fd)
-socket connection =
-    do cFd <- withConn connection c_PQsocket
-       return $ case cFd of
-                  -1 -> Nothing
-                  _ -> Just $ Fd cFd
 
 
 -- | Returns the database name of the connection.
@@ -209,7 +200,6 @@ data ConnStatus
     | ConnectionSetEnv             -- ^ Negotiating environment-driven
                                    -- parameter settings.
     | ConnectionSSLStartup         -- ^ Negotiating SSL encryption.
-    | ConnectionOther Int          -- ^ Unknown connection state
       deriving Show
 
 
@@ -228,21 +218,93 @@ data ConnStatus
 -- other status codes that might be seen.
 status :: Connection
        -> IO ConnStatus
-status connection =
-    withConn connection (return . status')
-    where
-      status' connPtr =
-          case c_PQstatus connPtr of
-            (#const CONNECTION_OK)               -> ConnectionOk
-            (#const CONNECTION_BAD)              -> ConnectionBad
-            (#const CONNECTION_STARTED)          -> ConnectionStarted
-            (#const CONNECTION_MADE)             -> ConnectionMade
-            (#const CONNECTION_AWAITING_RESPONSE)-> ConnectionAwaitingResponse
-            (#const CONNECTION_AUTH_OK)          -> ConnectionAuthOk
-            (#const CONNECTION_SETENV)           -> ConnectionSetEnv
-            (#const CONNECTION_SSL_STARTUP)      -> ConnectionSSLStartup
-            --(#const CONNECTION_NEEDED)           -> ConnectionNeeded
-            c                                    -> ConnectionOther $ fromEnum c
+status connection = do
+  stat <- withConn connection c_PQstatus
+  return $ case stat of
+             (#const CONNECTION_OK)               -> ConnectionOk
+             (#const CONNECTION_BAD)              -> ConnectionBad
+             (#const CONNECTION_STARTED)          -> ConnectionStarted
+             (#const CONNECTION_MADE)             -> ConnectionMade
+             (#const CONNECTION_AWAITING_RESPONSE)-> ConnectionAwaitingResponse
+             (#const CONNECTION_AUTH_OK)          -> ConnectionAuthOk
+             (#const CONNECTION_SETENV)           -> ConnectionSetEnv
+             (#const CONNECTION_SSL_STARTUP)      -> ConnectionSSLStartup
+             --(#const CONNECTION_NEEDED)           -> ConnectionNeeded
+             c -> error $ "Unknown connection status " ++ show c
+
+
+data TransactionStatus = TransIdle    -- ^ currently idle
+                       | TransActive  -- ^ a command is in progress
+                       | TransInTrans -- ^ idle, in a valid transaction block
+                       | TransInError -- ^ idle, in a failed transaction block
+                       | TransUnknown -- ^ the connection is bad
+
+-- | Returns the current in-transaction status of the server.
+--
+-- 'TransActive' is reported only when a query has been sent to the
+-- server and not yet completed.
+transactionStatus :: Connection
+                  -> IO TransactionStatus
+transactionStatus connection = do
+    stat <- withConn connection c_PQtransactionStatus
+    return $ case stat of
+               (#const PQTRANS_IDLE)    -> TransIdle
+               (#const PQTRANS_ACTIVE)  -> TransActive
+               (#const PQTRANS_INTRANS) -> TransInTrans
+               (#const PQTRANS_INERROR) -> TransInError
+               (#const PQTRANS_UNKNOWN) -> TransUnknown
+               c -> error $ "Unknown transaction status " ++ show c
+
+
+-- | Looks up a current parameter setting of the server.
+--
+-- Certain parameter values are reported by the server automatically
+-- at connection startup or whenever their values
+-- change. 'parameterStatus' can be used to interrogate these
+-- settings. It returns the current value of a parameter if known, or
+-- 'Nothing' if the parameter is not known.
+parameterStatus :: Connection
+                -> B.ByteString -- ^ paramName
+                -> IO (Maybe B.ByteString)
+parameterStatus connection paramName =
+    withConn connection $ \connPtr ->
+        B.useAsCString paramName $ \paramNamePtr ->
+        do cstr <- c_PQparameterStatus connPtr paramNamePtr
+           if cstr == nullPtr
+             then return Nothing
+             else fmap Just $ B.packCString cstr
+
+
+-- | Interrogates the frontend/backend protocol being used.
+--
+-- Applications might wish to use this to determine whether certain
+-- features are supported. Currently, the possible values are 2 (2.0
+-- protocol), 3 (3.0 protocol), or zero (connection bad). This will
+-- not change after connection startup is complete, but it could
+-- theoretically change during a connection reset. The 3.0 protocol
+-- will normally be used when communicating with PostgreSQL 7.4 or
+-- later servers; pre-7.4 servers support only protocol 2.0. (Protocol
+-- 1.0 is obsolete and not supported by libpq.)
+protocolVersion :: Connection
+                -> IO Int
+protocolVersion connection =
+    fmap fromIntegral $ withConn connection c_PQprotocolVersion
+
+
+-- | Returns an integer representing the backend version.
+--
+-- Applications might use this to determine the version of the
+-- database server they are connected to. The number is formed by
+-- converting the major, minor, and revision numbers into
+-- two-decimal-digit numbers and appending them together. For example,
+-- version 8.1.5 will be returned as 80105, and version 8.2 will be
+-- returned as 80200 (leading zeroes are not shown). Zero is returned
+-- if the connection is bad.
+serverVersion :: Connection
+              -> IO Int
+serverVersion connection =
+    fmap fromIntegral $ withConn connection c_PQserverVersion
+
 
 -- | Returns the error message most recently generated by an operation
 -- on the connection.
@@ -270,6 +332,18 @@ statusString f connection =
              else B.packCString cstr
 
 
+-- | Obtains the file descriptor number of the connection socket to
+-- the server. (This will not change during normal operation, but
+-- could change during connection setup or reset.)
+socket :: Connection
+       -> IO (Maybe Fd)
+socket connection =
+    do cFd <- withConn connection c_PQsocket
+       return $ case cFd of
+                  -1 -> Nothing
+                  _ -> Just $ Fd cFd
+
+
 -- | Returns the process 'CPid' of the backend server process
 -- handling this connection.
 --
@@ -281,6 +355,32 @@ backendPID :: Connection
            -> IO CPid
 backendPID connection =
     fmap fromIntegral $ withConn connection c_PQbackendPID
+
+
+-- | Returns 'True' if the connection authentication method required a
+-- password, but none was available. Returns 'False' if not.
+--
+-- This function can be applied after a failed connection attempt to
+-- decide whether to prompt the user for a password.
+connectionNeedsPassword :: Connection
+                        -> IO Bool
+connectionNeedsPassword connection =
+    boolFromConn connection c_PQconnectionNeedsPassword
+
+
+-- | Returns 'True' if the connection authentication method used a
+-- password. Returns 'False' if not.
+--
+-- This function can be applied after either a failed or successful
+-- connection attempt to detect whether the server demanded a
+-- password.
+connectionUsedPassword :: Connection
+                       -> IO Bool
+connectionUsedPassword connection =
+    boolFromConn connection c_PQconnectionUsedPassword
+
+
+-- TODO: getSSL :: Connection -> IO SSL
 
 
 -- | Escapes a string for use within an SQL command. This is useful
@@ -914,8 +1014,26 @@ foreign import ccall unsafe "libpq-fe.h PQoptions"
 foreign import ccall unsafe "libpq-fe.h PQbackendPID"
     c_PQbackendPID :: Ptr PGconn -> IO CInt
 
+foreign import ccall unsafe "libpq-fe.h PQPQconnectionNeedsPassword"
+    c_PQconnectionNeedsPassword :: Ptr PGconn -> IO CInt
+
+foreign import ccall unsafe "libpq-fe.h PQPQconnectionUsedPassword"
+    c_PQconnectionUsedPassword :: Ptr PGconn -> IO CInt
+
 foreign import ccall unsafe "libpq-fe.h PQstatus"
-    c_PQstatus :: Ptr PGconn -> CInt
+    c_PQstatus :: Ptr PGconn -> IO CInt
+
+foreign import ccall unsafe "libpq-fe.h PQtransactionStatus"
+    c_PQtransactionStatus :: Ptr PGconn -> IO CInt
+
+foreign import ccall unsafe "libpq-fe.h PQparameterStatus"
+    c_PQparameterStatus :: Ptr PGconn -> CString -> IO CString
+
+foreign import ccall unsafe "libpq-fe.h PQprotocolVersion"
+    c_PQprotocolVersion :: Ptr PGconn -> IO CInt
+
+foreign import ccall unsafe "libpq-fe.h PQserverVersion"
+    c_PQserverVersion :: Ptr PGconn -> IO CInt
 
 foreign import ccall unsafe "libpq-fe.h PQsocket"
     c_PQsocket :: Ptr PGconn -> IO CInt
