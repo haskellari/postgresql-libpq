@@ -1,0 +1,5 @@
+*~
+Database/PQ.hs
+*.hi
+*.o
+dist
