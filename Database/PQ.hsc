@@ -454,7 +454,7 @@ unescapeBytea bs =
             then return Nothing
             else do tofp <- newForeignPtr p_PQfreemem to
                     l <- peek to_length
-                    return $ Just $ B.fromForeignPtr tofp 0 ((fromIntegral l) - 1)
+                    return $ Just $ B.fromForeignPtr tofp 0 $ fromIntegral l
 
 
 -- | Sets the client encoding.
