@@ -108,7 +108,7 @@ module Database.PQ
     , flush
 
     -- * Control Functions
-    --, clientEncoding
+    , clientEncoding
     , setClientEncoding
     --, setErrorVerbosity
     --, trace
@@ -455,6 +455,18 @@ unescapeBytea bs =
             else do tofp <- newForeignPtr p_PQfreemem to
                     l <- peek to_length
                     return $ Just $ B.fromForeignPtr tofp 0 $ fromIntegral l
+
+
+-- | Returns the client encoding.
+clientEncoding :: Connection
+               -> IO B.ByteString
+clientEncoding connection =
+    withConn connection $ \ptr ->
+        do i <- c_PQclientEncoding ptr
+           cstr <- c_pg_encoding_to_char i
+           len <- B.c_strlen cstr
+           fp <- newForeignPtr_ $ castPtr cstr
+           return $ B.fromForeignPtr fp 0 $ fromIntegral len
 
 
 -- | Sets the client encoding.
@@ -1297,6 +1309,12 @@ foreign import ccall unsafe "libpq-fe.h PQresetPoll"
 
 foreign import ccall unsafe "libpq-fe.h &PQfinish"
     p_PQfinish :: FunPtr (Ptr PGconn -> IO ())
+
+foreign import ccall unsafe "libpq-fe.h PQclientEncoding"
+    c_PQclientEncoding :: Ptr PGconn -> IO CInt
+
+foreign import ccall unsafe "libpq-fe.h pg_encoding_to_char"
+    c_pg_encoding_to_char :: CInt -> IO CString
 
 foreign import ccall unsafe "libpq-fe.h PQsetClientEncoding"
     c_PQsetClientEncoding :: Ptr PGconn -> CString -> IO CInt
