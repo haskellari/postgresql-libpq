@@ -110,9 +110,10 @@ module Database.PQ
     -- * Control Functions
     , clientEncoding
     , setClientEncoding
-    --, setErrorVerbosity
-    --, trace
-    --, untrace
+    , Verbosity(..)
+    , setErrorVerbosity
+    , trace
+    , untrace
     )
 where
 
@@ -477,6 +478,68 @@ setClientEncoding connection enc =
                    c_PQsetClientEncoding c s
 
        return $ stat == 0
+
+
+data Verbosity = ErrorsTerse
+               | ErrorsDefault
+               | ErrorsVerbose deriving (Show, Eq)
+
+instance Enum Verbosity where
+    toEnum (#const PQERRORS_TERSE)   = ErrorsTerse
+    toEnum (#const PQERRORS_DEFAULT) = ErrorsDefault
+    toEnum (#const PQERRORS_VERBOSE) = ErrorsVerbose
+    toEnum _ = error "Database.PQ.Enum.Verbosity.toEnum: bad argument"
+
+    fromEnum ErrorsTerse   = (#const PQERRORS_TERSE)
+    fromEnum ErrorsDefault = (#const PQERRORS_DEFAULT)
+    fromEnum ErrorsVerbose = (#const PQERRORS_VERBOSE)
+
+
+-- | Determines the verbosity of messages returned by 'errorMessage'
+-- and 'resultErrorMessage'.
+--
+-- 'setErrorVerbosity' sets the verbosity mode, returning the
+-- connection's previous setting. In 'ErrorsTerse' mode, returned
+-- messages include severity, primary text, and position only; this
+-- will normally fit on a single line. The default mode produces
+-- messages that include the above plus any detail, hint, or context
+-- fields (these might span multiple lines). The 'ErrorsVerbose' mode
+-- includes all available fields. Changing the verbosity does not
+-- affect the messages available from already-existing 'Result'
+-- objects, only subsequently-created ones.
+setErrorVerbosity :: Connection
+                  -> Verbosity
+                  -> IO Verbosity
+setErrorVerbosity connection verbosity =
+    enumFromConn connection $ \p ->
+        c_PQsetErrorVerbosity p $ fromIntegral $ fromEnum verbosity
+
+
+-- | Enables tracing of the client/server communication to a debugging
+-- file stream.
+--
+-- Note: On Windows, if the libpq library and an application are
+-- compiled with different flags, this function call will crash the
+-- application because the internal representation of the FILE
+-- pointers differ. Specifically, multithreaded/single-threaded,
+-- release/debug, and static/dynamic flags should be the same for the
+-- library and all applications using that library.
+trace :: Connection
+      -> Handle
+      -> IO ()
+trace connection h =
+    withConn connection $ \ptr ->
+      B.useAsCString "w" $ \mode -> do
+        dup_h <- hDuplicate h
+        fd <- handleToFd dup_h
+        cfile <- c_fdopen (fromIntegral fd) mode
+        c_PQtrace ptr cfile
+
+
+-- | Disables tracing started by PQtrace.
+untrace :: Connection
+        -> IO ()
+untrace connection = withConn connection c_PQuntrace
 
 
 -- | Submits a command to the server without waiting for the
@@ -1318,6 +1381,16 @@ foreign import ccall unsafe "libpq-fe.h pg_encoding_to_char"
 
 foreign import ccall unsafe "libpq-fe.h PQsetClientEncoding"
     c_PQsetClientEncoding :: Ptr PGconn -> CString -> IO CInt
+
+type PGVerbosity = CInt
+foreign import ccall unsafe "libpq-fe.h PQsetErrorVerbosity"
+    c_PQsetErrorVerbosity :: Ptr PGconn -> PGVerbosity -> IO PGVerbosity
+
+foreign import ccall unsafe "libpq-fe.h PQtrace"
+    c_PQtrace :: Ptr PGconn -> Ptr CFile -> IO ()
+
+foreign import ccall unsafe "libpq-fe.h PQuntrace"
+    c_PQuntrace :: Ptr PGconn -> IO ()
 
 foreign import ccall unsafe "libpq-fe.h PQsendQuery"
     c_PQsendQuery :: Ptr PGconn -> CString ->IO CInt
