@@ -447,7 +447,7 @@ escapeByteaConn connection bs =
 unescapeBytea :: B.ByteString
               -> IO (Maybe B.ByteString)
 unescapeBytea bs =
-    B.unsafeUseAsCString bs $ \from ->
+    B.useAsCString bs $ \from ->
         alloca $ \to_length -> do
           to <- c_PQunescapeBytea from to_length
           if to == nullPtr
