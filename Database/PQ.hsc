@@ -81,17 +81,16 @@ module Database.PQ
     , defaultPrintOpt
 
     -- Retrieving Result Information for Other Commands
-    --, cmdStatus
-    --, cmdTuples
-    --, oidValue
-    --, oidStatus
+    , cmdStatus
+    , cmdTuples
+    , oidValue
 
     -- * Escaping Strings for Inclusion in SQL Commands
     , escapeStringConn
 
     -- * Escaping Binary Strings for Inclusion in SQL Commands
     , escapeByteaConn
-    --, unescapeBytea
+    , unescapeBytea
 
     -- * Asynchronous Command Processing
     , sendQuery
@@ -428,6 +427,34 @@ escapeByteaConn connection bs =
                         l <- peek to_length
                         return $ Just $ B.fromForeignPtr tofp 0 ((fromIntegral l) - 1)
 
+
+
+-- | Converts a 'ByteString' representation of binary data into binary
+-- data — the reverse of 'PQescapeByteaConn'. This is needed when
+-- retrieving bytea data in text format, but not when retrieving it in
+-- binary format.
+--
+-- The parameter points to a string such as might be returned by
+-- 'getvalue' when applied to a bytea column. 'unescapeBytea' converts
+-- this string representation into its binary representation. It
+-- returns a 'ByteString', or 'Nothing' on error.
+--
+-- This conversion is not exactly the inverse of 'escapeByteaConn',
+-- because the string is not expected to be "escaped" when received
+-- from 'getvalue'. In particular this means there is no need for
+-- string quoting considerations, and so no need for a 'Connection'
+-- parameter.
+unescapeBytea :: B.ByteString
+              -> IO (Maybe B.ByteString)
+unescapeBytea bs =
+    B.unsafeUseAsCString bs $ \from ->
+        alloca $ \to_length -> do
+          to <- c_PQunescapeBytea from to_length
+          if to == nullPtr
+            then return Nothing
+            else do tofp <- newForeignPtr p_PQfreemem to
+                    l <- peek to_length
+                    return $ Just $ B.fromForeignPtr tofp 0 ((fromIntegral l) - 1)
 
 
 -- | Sets the client encoding.
@@ -1141,6 +1168,53 @@ print h (Result res) po =
 
 
 
+-- These functions are used to extract other information from PGresult objects.
+
+-- | Returns the command status tag from the SQL command that
+-- generated the PGresult.
+--
+-- Commonly this is just the name of the command, but it might include
+-- additional data such as the number of rows processed.
+cmdStatus :: Result
+          -> IO B.ByteString
+cmdStatus result =
+    withResult result $ \ptr ->
+        c_PQcmdStatus ptr >>= B.packCString
+
+
+-- | Returns the number of rows affected by the SQL command.
+--
+-- This function returns a string containing the number of rows
+-- affected by the SQL statement that generated the 'Result'. This
+-- function can only be used following the execution of a SELECT,
+-- CREATE TABLE AS, INSERT, UPDATE, DELETE, MOVE, FETCH, or COPY
+-- statement, or an EXECUTE of a prepared query that contains an
+-- INSERT, UPDATE, or DELETE statement. If the command that generated
+-- the 'Result' was anything else, 'cmdTuples' returns an empty
+-- string.
+cmdTuples :: Result
+          -> IO B.ByteString
+cmdTuples result =
+    withResult result $ \ptr ->
+        c_PQcmdTuples ptr >>= B.packCString
+
+
+-- | Returns the 'Oid' of the inserted row, if the SQL command was an
+-- INSERT that inserted exactly one row into a table that has OIDs, or
+-- a EXECUTE of a prepared query containing a suitable INSERT
+-- statement. Otherwise, this function returns 'Nothing'. This
+-- function will also return 'Nothing' if the table affected by the
+-- INSERT statement does not contain OIDs.
+oidValue :: Result
+         -> IO (Maybe Oid)
+oidValue result =
+    withResult result $ \ptr ->
+        do oid <- c_PQoidValue ptr
+           return $ case oid of
+                      (#const InvalidOid) -> Nothing
+                      _                   -> Just oid
+
+
 withResult :: Result
            -> (Ptr PGresult -> IO b)
            -> IO b
@@ -1324,6 +1398,15 @@ foreign import ccall unsafe "stdio.h fdopen"
 foreign import ccall unsafe "libpq-fe.h PQprint"
     c_PQprint :: Ptr CFile -> Ptr PGresult -> Ptr PrintOpt -> IO ()
 
+foreign import ccall unsafe "libpq-fe.h PQcmdStatus"
+    c_PQcmdStatus :: Ptr PGresult -> IO CString
+
+foreign import ccall unsafe "libpq-fe.h PQcmdTuples"
+    c_PQcmdTuples :: Ptr PGresult -> IO CString
+
+foreign import ccall unsafe "libpq-fe.h PQoidValue"
+    c_PQoidValue :: Ptr PGresult -> IO Oid
+
 foreign import ccall unsafe "libpq-fe.h PQescapeStringConn"
     c_PQescapeStringConn :: Ptr PGconn
                          -> Ptr Word8 -- Actually (CString)
@@ -1338,6 +1421,11 @@ foreign import ccall unsafe "libpq-fe.h PQescapeByteaConn"
                         -> CSize
                         -> Ptr CSize
                         -> IO (Ptr Word8) -- Actually (IO (Ptr CUChar))
+
+foreign import ccall unsafe "libpq-fe.h PQunescapeBytea"
+    c_PQunescapeBytea :: CString -- Actually (Ptr CUChar)
+                      -> Ptr CSize
+                      -> IO (Ptr Word8) -- Actually (IO (Ptr CUChar))
 
 foreign import ccall unsafe "libpq-fe.h &PQfreemem"
     p_PQfreemem :: FunPtr (Ptr a -> IO ())
