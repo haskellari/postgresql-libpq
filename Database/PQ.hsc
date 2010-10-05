@@ -142,7 +142,6 @@ where
 import Prelude hiding ( print )
 import Control.Monad ( when )
 import Foreign
-import Foreign.Ptr
 import Foreign.C.Types
 import Foreign.C.String
 import GHC.Conc ( -- threadWaitRead
