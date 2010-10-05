@@ -107,6 +107,11 @@ module Database.PQ
     , FlushStatus(..)
     , flush
 
+    -- * Cancelling Queries in Progress
+    , Cancel
+    , getCancel
+    , cancel
+
     -- * Control Functions
     , clientEncoding
     , setClientEncoding
@@ -276,7 +281,7 @@ parameterStatus connection paramName =
         do cstr <- c_PQparameterStatus connPtr paramNamePtr
            if cstr == nullPtr
              then return Nothing
-             else fmap Just $ B.packCString cstr
+             else Just `fmap` B.packCString cstr
 
 
 -- | Interrogates the frontend/backend protocol being used.
@@ -770,6 +775,62 @@ flush connection =
                   0 -> FlushOk
                   1 -> FlushWriting
                   _ -> FlushFailed
+
+
+-- | Contains the information needed to cancel a command issued
+-- through a particular database connection.
+newtype Cancel = Cancel (ForeignPtr PGcancel) deriving Eq
+data PGcancel
+
+
+-- | Creates a data structure containing the information needed to
+-- cancel a command issued through a particular database connection.
+--
+-- 'getCancel' creates a 'Cancel' object given a 'Connection'. It will
+-- return 'Nothing' if the given conn is an invalid connection.
+
+getCancel :: Connection
+          -> IO (Maybe Cancel)
+getCancel connection =
+    withConn connection $ \conn ->
+        do ptr <- c_PQgetCancel conn
+           if ptr == nullPtr
+             then return Nothing
+             else do fp <- newForeignPtr p_PQfreeCancel ptr
+                     return $ Just $ Cancel fp
+
+
+-- | Requests that the server abandon processing of the current
+-- command.
+--
+-- The return value is 'Right ()' if the cancel request was
+-- successfully dispatched and if not, 'Left B.ByteString' containing
+-- an error message explaining why not.
+--
+-- Successful dispatch is no guarantee that the request will have any
+-- effect, however. If the cancellation is effective, the current
+-- command will terminate early and return an error result. If the
+-- cancellation fails (say, because the server was already done
+-- processing the command), then there will be no visible result at
+-- all.
+--
+-- PQcancel can safely be invoked from a signal handler, if the errbuf
+-- is a local variable in the signal handler. The PGcancel object is
+-- read-only as far as PQcancel is concerned, so it can also be
+-- invoked from a thread that is separate from the one manipulating
+-- the PGconn object.
+cancel :: Cancel
+       -> IO (Either B.ByteString ())
+cancel (Cancel fp) =
+    withForeignPtr fp $ \ptr ->
+        allocaBytes errbufsize $ \errbuf ->
+            do res <- c_PQcancel ptr errbuf $ fromIntegral errbufsize
+               case res of
+                 1 -> return $ Right ()
+                 _ -> Left `fmap` B.packCString errbuf
+
+    where
+      errbufsize = 256
 
 
 -- | If input is available from the server, consume it.
@@ -1490,7 +1551,16 @@ foreign import ccall unsafe "libpq-fe.h PQsendDescribePortal"
     c_PQsendDescribePortal :: Ptr PGconn -> CString -> IO CInt
 
 foreign import ccall unsafe "libpq-fe.h PQflush"
-    c_PQflush :: Ptr PGconn ->IO CInt
+    c_PQflush :: Ptr PGconn -> IO CInt
+
+foreign import ccall unsafe "libpq-fe.h PQgetCancel"
+    c_PQgetCancel :: Ptr PGconn -> IO (Ptr PGcancel)
+
+foreign import ccall unsafe "libpq-fe.h &PQfreeCancel"
+    p_PQfreeCancel :: FunPtr (Ptr PGcancel -> IO ())
+
+foreign import ccall unsafe "libpq-fe.h PQcancel"
+    c_PQcancel :: Ptr PGcancel -> CString -> CInt -> IO CInt
 
 foreign import ccall unsafe "libpq-fe.h PQconsumeInput"
     c_PQconsumeInput :: Ptr PGconn ->IO CInt
