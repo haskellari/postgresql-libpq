@@ -53,8 +53,8 @@ module Database.PQ
     , resultStatus
     , resStatus
     , resultErrorMessage
-    , DiagField(..)
-    --, resultErrorField
+    , FieldCode(..)
+    , resultErrorField
 
     -- * Retrieving Query Result Information
     , ntuples
@@ -905,7 +905,7 @@ resultErrorMessage (Result res) =
     B.packCString =<< withForeignPtr res c_PQresultErrorMessage
 
 
-data DiagField = DiagSeverity
+data FieldCode = DiagSeverity
                -- ^ The severity; the field contents are ERROR, FATAL,
                -- or PANIC (in an error message), or WARNING, NOTICE,
                -- DEBUG, INFO, or LOG (in a notice message), or a
@@ -976,22 +976,63 @@ data DiagField = DiagSeverity
                -- error.
 
 
+instance Enum FieldCode where
+    toEnum (#const PG_DIAG_SEVERITY)           = DiagSeverity
+    toEnum (#const PG_DIAG_SQLSTATE)           = DiagSqlstate
+    toEnum (#const PG_DIAG_MESSAGE_PRIMARY)    = DiagMessagePrimary
+    toEnum (#const PG_DIAG_MESSAGE_DETAIL)     = DiagMessageDetail
+    toEnum (#const PG_DIAG_MESSAGE_HINT)       = DiagMessageHint
+    toEnum (#const PG_DIAG_STATEMENT_POSITION) = DiagStatementPosition
+    toEnum (#const PG_DIAG_INTERNAL_POSITION)  = DiagInternalPosition
+    toEnum (#const PG_DIAG_INTERNAL_QUERY)     = DiagInternalQuery
+    toEnum (#const PG_DIAG_CONTEXT)            = DiagContext
+    toEnum (#const PG_DIAG_SOURCE_FILE)        = DiagSourceFile
+    toEnum (#const PG_DIAG_SOURCE_LINE)        = DiagSourceLine
+    toEnum (#const PG_DIAG_SOURCE_FUNCTION)    = DiagSourceFunction
+    toEnum _ = error "Database.PQ.Enum.FieldCode.toEnum: bad argument"
 
--- PQresultErrorField
--- Returns an individual field of an error report.
+    fromEnum DiagSeverity          = (#const PG_DIAG_SEVERITY)
+    fromEnum DiagSqlstate          = (#const PG_DIAG_SQLSTATE)
+    fromEnum DiagMessagePrimary    = (#const PG_DIAG_MESSAGE_PRIMARY)
+    fromEnum DiagMessageDetail     = (#const PG_DIAG_MESSAGE_DETAIL)
+    fromEnum DiagMessageHint       = (#const PG_DIAG_MESSAGE_HINT)
+    fromEnum DiagStatementPosition = (#const PG_DIAG_STATEMENT_POSITION)
+    fromEnum DiagInternalPosition  = (#const PG_DIAG_INTERNAL_POSITION)
+    fromEnum DiagInternalQuery     = (#const PG_DIAG_INTERNAL_QUERY)
+    fromEnum DiagContext           = (#const PG_DIAG_CONTEXT)
+    fromEnum DiagSourceFile        = (#const PG_DIAG_SOURCE_FILE)
+    fromEnum DiagSourceLine        = (#const PG_DIAG_SOURCE_LINE)
+    fromEnum DiagSourceFunction    = (#const PG_DIAG_SOURCE_FUNCTION)
 
--- char *PQresultErrorField(const PGresult *res, int fieldcode);
 
--- fieldcode is an error field identifier; see the symbols listed below. NULL is returned if the PGresult is not an error or warning result, or does not include the specified field. Field values will normally not include a trailing newline. The caller should not free the result directly. It will be freed when the associated PGresult handle is passed to PQclear.
-
--- The following field codes are available:
-
-
--- The client is responsible for formatting displayed information to meet its needs; in particular it should break long lines as needed. Newline characters appearing in the error message fields should be treated as paragraph breaks, not line breaks.
-
--- Errors generated internally by libpq will have severity and primary message, but typically no other fields. Errors returned by a pre-3.0-protocol server will include severity and primary message, and sometimes a detail message, but no other fields.
-
--- Note that error fields are only available from PGresult objects, not PGconn objects; there is no PQerrorField function.
+-- | Returns an individual field of an error report.
+--
+-- fieldcode is an error field identifier; see the symbols listed
+-- below. 'Nothing' is returned if the PGresult is not an error or
+-- warning result, or does not include the specified field. Field
+-- values will normally not include a trailing newline.
+--
+-- The client is responsible for formatting displayed information to
+-- meet its needs; in particular it should break long lines as
+-- needed. Newline characters appearing in the error message fields
+-- should be treated as paragraph breaks, not line breaks.
+--
+-- Errors generated internally by libpq will have severity and primary
+-- message, but typically no other fields. Errors returned by a
+-- pre-3.0-protocol server will include severity and primary message,
+-- and sometimes a detail message, but no other fields.
+--
+-- Note that error fields are only available from 'Result' objects,
+-- not 'Connection' objects; there is no errorField function.
+resultErrorField :: Result
+                 -> FieldCode
+                 -> IO (Maybe B.ByteString)
+resultErrorField result fieldcode =
+    withResult result $ \res ->
+        do cstr <- c_PQresultErrorField res $ fromIntegral $ fromEnum fieldcode
+           if cstr == nullPtr
+             then return Nothing
+             else Just `fmap` B.packCString cstr
 
 
 -- | Returns the number of rows (tuples) in the query result. Because
@@ -1477,6 +1518,9 @@ foreign import ccall unsafe "libpq-fe.h PQresStatus"
 
 foreign import ccall unsafe "libpq-fe.h PQresultErrorMessage"
     c_PQresultErrorMessage :: Ptr PGresult -> IO CString
+
+foreign import ccall unsafe "libpq-fe.h PQresultErrorField"
+    c_PQresultErrorField :: Ptr PGresult -> CInt -> IO CString
 
 foreign import ccall unsafe "libpq-fe.h PQntuples"
     c_PQntuples :: Ptr PGresult -> CInt
