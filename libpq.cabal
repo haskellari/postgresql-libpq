@@ -24,7 +24,7 @@ Library
                      , bytestring
                      , unix
 
-  GHC-Options:       -Wall -Werror
+  GHC-Options:       -Wall
   Extra-Libraries:   pq
   -- Other-modules:
   Build-tools:       hsc2hs
