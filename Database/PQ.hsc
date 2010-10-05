@@ -97,8 +97,8 @@ module Database.PQ
     , sendQueryParams
     , sendPrepare
     , sendQueryPrepared
-    --, sendDescribePrepared
-    --, sendDescribePortal
+    , sendDescribePrepared
+    , sendDescribePortal
     , getResult
     , consumeInput
     , isBusy
@@ -636,6 +636,40 @@ sendQueryPrepared connection stmtName mPairs rFmt =
                                     )
 
 
+-- | Submits a request to obtain information about the specified
+-- prepared statement, without waiting for completion.
+--
+-- This is an asynchronous version of 'describePrepared': it returns
+-- 'True' if it was able to dispatch the request, and 'False' if
+-- not. After a successful call, call 'getResult' to obtain the
+-- results. The function's parameters are handled identically to
+-- 'describePrepared'. Like 'describePrepared', it will not work on
+-- 2.0-protocol connections.
+sendDescribePrepared :: Connection
+                     -> B.ByteString -- ^ stmtName
+                     -> IO Bool
+sendDescribePrepared connection stmtName =
+    enumFromConn connection $ \c ->
+        B.useAsCString stmtName $ \s ->
+            c_PQsendDescribePrepared c s
+
+
+-- | Submits a request to obtain information about the specified
+-- portal, without waiting for completion.
+--
+-- This is an asynchronous version of 'describePortal': it returns
+-- 'True' if it was able to dispatch the request, and 'False' if
+-- not. After a successful call, call 'getResult' to obtain the
+-- results. The function's parameters are handled identically to
+-- 'describePortal'. Like 'describePortal', it will not work on
+-- 2.0-protocol connections.
+sendDescribePortal :: Connection
+                     -> B.ByteString -- ^ portalName
+                     -> IO Bool
+sendDescribePortal connection portalName =
+    enumFromConn connection $ \c ->
+        B.useAsCString portalName $ \p ->
+            c_PQsendDescribePortal c p
 
 
 -- | Make a connection to the database server in a nonblocking manner.
@@ -779,10 +813,10 @@ isnonblocking :: Connection
 isnonblocking connection = enumFromConn connection c_PQisnonblocking
 
 
--- | Waits for the next result from a prior sendQuery, sendQueryParams,
--- sendPrepare, or sendQueryPrepared call, and returns it. A null
--- pointer is returned when the command is complete and there will be
--- no more results.
+-- | Waits for the next result from a prior 'sendQuery',
+-- 'sendQueryParams', 'sendPrepare', or 'sendQueryPrepared' call, and
+-- returns it. A null pointer is returned when the command is complete
+-- and there will be no more results.
 getResult :: Connection
           -> IO (Maybe Result)
 getResult connection =
@@ -1407,6 +1441,12 @@ foreign import ccall unsafe "libpq-fe.h PQsendPrepare"
 foreign import ccall unsafe "libpq-fe.h PQsendQueryPrepared"
     c_PQsendQueryPrepared :: Ptr PGconn -> CString -> CInt -> Ptr CString
                           -> Ptr CInt -> Ptr CInt -> CInt -> IO CInt
+
+foreign import ccall unsafe "libpq-fe.h PQsendDescribePrepared"
+    c_PQsendDescribePrepared :: Ptr PGconn -> CString -> IO CInt
+
+foreign import ccall unsafe "libpq-fe.h PQsendDescribePortal"
+    c_PQsendDescribePortal :: Ptr PGconn -> CString -> IO CInt
 
 foreign import ccall unsafe "libpq-fe.h PQflush"
     c_PQflush :: Ptr PGconn ->IO CInt
