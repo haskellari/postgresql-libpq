@@ -150,7 +150,12 @@ import GHC.Conc ( -- threadWaitRead
 import System.Posix.Types ( Fd(..) )
 import Data.List ( foldl' )
 import System.IO ( Handle )
+
+#if __GLASGOW_HASKELL__ >= 611
+import GHC.IO.Handle ( hDuplicate )
+#else
 import GHC.Handle ( hDuplicate )
+#endif
 import System.Posix.IO ( handleToFd )
 import Control.Concurrent.MVar
 import System.Posix.Types ( CPid )
