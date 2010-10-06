@@ -16,9 +16,9 @@ Author:              Grant Monroe
 Maintainer:          grant@tnarg.com
 -- Copyright:
 Category:            Database
-Build-type:          Simple
+Build-type:          Custom
 -- Extra-source-files:
-Cabal-version:       >=1.2
+Cabal-version:       >=1.8
 Library
   Exposed-modules:     Database.PQ
 
