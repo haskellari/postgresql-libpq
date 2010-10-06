@@ -1,5 +1,5 @@
 Name:                libpq
-Version:             0.2
+Version:             0.3
 Synopsis:            libpq binding for Haskell
 
 Description:         This is a binding to libpq: the C application
