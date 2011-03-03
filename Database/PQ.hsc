@@ -2001,27 +2001,32 @@ loMode mode = case mode of
                 ReadMode      -> (#const INV_READ)
                 _             -> (#const INV_READ) .|. (#const INV_WRITE)
 
-loCreat :: Connection -> IO Oid
+toMaybeOid :: Oid -> Maybe Oid
+toMaybeOid oid = case oid of
+                   0 -> Nothing
+                   _ -> Just oid
+
+loCreat :: Connection -> IO (Maybe Oid)
 loCreat connection
     = withConn connection $ \c -> do
-        c_lo_creat c (loMode ReadMode)
+        toMaybeOid `fmap` c_lo_creat c (loMode ReadMode)
 
-loCreate :: Connection -> Oid -> IO Oid
+loCreate :: Connection -> Oid -> IO (Maybe Oid)
 loCreate connection oid
     = withConn connection $ \c -> do
-        c_lo_create c oid
+        toMaybeOid `fmap` c_lo_create c oid
 
-loImport :: Connection -> FilePath -> IO Oid
+loImport :: Connection -> FilePath -> IO (Maybe Oid)
 loImport connection filepath
     = withConn connection $ \c -> do
         withCString filepath $ \f -> do
-          c_lo_import c f
+          toMaybeOid `fmap` c_lo_import c f
 
-loImportWithOid :: Connection -> FilePath -> Oid -> IO Oid
+loImportWithOid :: Connection -> FilePath -> Oid -> IO (Maybe Oid)
 loImportWithOid connection filepath oid
     = withConn connection $ \c -> do
         withCString filepath $ \f -> do
-          c_lo_import_with_oid c f oid
+          toMaybeOid `fmap` c_lo_import_with_oid c f oid
 
 loExport :: Connection -> Oid -> FilePath -> IO CInt
 loExport connection oid filepath
@@ -2034,13 +2039,13 @@ loOpen connection oid mode
     = withConn connection $ \c -> do
         fd <- c_lo_open c oid (loMode mode)
         case fd of
-          -1 -> Nothing 
-          _ | fd >= 0 -> do
+          -1 -> return Nothing 
+          _  -> do
                   -- FIXME:  review this seek, it's probably slightly wrong
-                  --         also,  how should the error code be handled?
-                  _ <- c_lo_lseek c fd 0 $ case mode of
-                                             AppendMode -> #const SEEK_END
-                                             _          -> #const SEEK_SET
+                  --         also,  what should be done with the error code?
+                  _ <- if mode == AppendMode
+                        then c_lo_lseek c fd 0 (#const SEEK_END)
+                        else return 0
                   return (Just (Fd fd))
 
 loWrite :: Connection -> Fd -> B.ByteString -> IO Int
