@@ -135,6 +135,20 @@ module Database.PQ
     , setErrorVerbosity
     , trace
     , untrace
+
+    , loCreat
+    , loCreate
+    , loImport
+    , loImportWithOid
+    , loExport
+    , loOpen
+    , loWrite
+    , loRead
+    , loSeek
+    , loTell
+    , loTruncate
+    , loClose
+    , loUnlink
     )
 where
 
@@ -150,7 +164,7 @@ import GHC.Conc ( -- threadWaitRead
                  threadWaitWrite)
 import System.Posix.Types ( Fd(..) )
 import Data.List ( foldl' )
-import System.IO ( Handle )
+import System.IO ( Handle, IOMode(..), SeekMode(..) )
 
 #if __GLASGOW_HASKELL__ >= 611
 import GHC.IO.Handle ( hDuplicate )
@@ -167,6 +181,7 @@ import qualified Data.ByteString.Internal as B ( fromForeignPtr
                                                , c_strlen
                                                )
 import qualified Data.ByteString as B
+
 
 -- $dbconn
 -- The following functions deal with making a connection to a
@@ -1981,6 +1996,105 @@ maybeBsFromForeignPtr fp f =
 --     where
 --       finalizer = touchForeignPtr fp
 
+loMode :: IOMode -> CInt
+loMode mode = case mode of
+                ReadMode      -> (#const INV_READ)
+                WriteMode     -> (#const INV_WRITE)
+                ReadWriteMode -> (#const INV_READ) .|. (#const INV_WRITE)
+                AppendMode    -> (#const INV_READ) .|. (#const INV_WRITE)
+
+loCreat :: Connection -> IO Oid
+loCreat connection
+    = withConn connection $ \c -> do
+        c_lo_creat c (loMode ReadMode)
+
+loCreate :: Connection -> Oid -> IO Oid
+loCreate connection oid
+    = withConn connection $ \c -> do
+        c_lo_create c oid
+
+loImport :: Connection -> FilePath -> IO Oid
+loImport connection filepath
+    = withConn connection $ \c -> do
+        withCString filepath $ \f -> do
+          c_lo_import c f
+
+loImportWithOid :: Connection -> FilePath -> Oid -> IO Oid
+loImportWithOid connection filepath oid
+    = withConn connection $ \c -> do
+        withCString filepath $ \f -> do
+          c_lo_import_with_oid c f oid
+
+loExport :: Connection -> Oid -> FilePath -> IO CInt
+loExport connection oid filepath
+    = withConn connection $ \c -> do
+        withCString filepath $ \f -> do
+          c_lo_export c oid f
+
+loOpen :: Connection -> Oid -> IOMode -> IO (Maybe Fd)
+loOpen connection oid mode
+    = withConn connection $ \c -> do
+        fd <- c_lo_open c oid (loMode mode)
+        -- FIXME:  review this seek throughly, it's probably slightly wrong
+        --         also,  how should errors be handled?
+        _ <- c_lo_lseek c fd 0 $ case mode of
+                                   AppendMode -> #const SEEK_END
+                                   _          -> #const SEEK_SET
+        return $ case fd of
+                   -1 -> Nothing
+                   _  -> Just $ Fd fd
+
+loWrite :: Connection -> Fd -> B.ByteString -> IO Int
+loWrite connection (Fd fd) bytes
+    = withConn connection $ \c -> do
+        B.unsafeUseAsCStringLen bytes $ \(byteptr,len) -> do
+          nbytes_written <- c_lo_write c fd byteptr (fromIntegral len)
+          return (fromIntegral nbytes_written)
+
+loRead :: Connection -> Fd -> Int -> IO B.ByteString
+loRead connection (Fd fd) maxlen
+    = withConn connection $ \c -> do
+        allocaBytes maxlen $ \(buf :: CString) -> do
+          len <- c_lo_read c fd buf (fromIntegral maxlen)
+          B.packCStringLen (buf,fromIntegral len)
+
+loSeek :: Connection -> Fd -> SeekMode -> Int -> IO ()
+loSeek connection (Fd fd) seekmode delta
+    = withConn connection $ \c -> do
+        let d = fromIntegral delta
+        -- FIXME:  what should be done with the error code?
+        _ <- c_lo_lseek c fd d $ case seekmode of
+                                   AbsoluteSeek -> #const SEEK_SET
+                                   RelativeSeek -> #const SEEK_CUR
+                                   SeekFromEnd  -> #const SEEK_END
+        return ()
+
+loTell :: Connection -> Fd -> IO Int
+loTell connection (Fd fd)
+    = withConn connection $ \c -> do
+        pos <- c_lo_tell c fd
+        return (fromIntegral pos)
+
+loTruncate :: Connection -> Fd -> Int -> IO ()
+loTruncate connection (Fd fd) size
+    = withConn connection $ \c -> do
+        -- FIXME:  what should be done with the error code?
+        _ <- c_lo_truncate c fd (fromIntegral size)
+        return ()
+
+loClose :: Connection -> Fd -> IO ()
+loClose connection (Fd fd)
+    = withConn connection $ \c -> do
+        -- FIXME:  what should be done with the error code?
+        _ <- c_lo_close c fd
+        return ()
+
+loUnlink :: Connection -> Oid -> IO ()
+loUnlink connection oid
+    = withConn connection $ \c -> do
+        -- FIXME:  what should be done with the error code?
+        _ <- c_lo_unlink c oid
+        return ()
 
 foreign import ccall safe "libpq-fe.h PQconnectdb"
     c_PQconnectdb :: CString ->IO (Ptr PGconn)
