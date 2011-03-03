@@ -139,6 +139,7 @@ module Database.PQ
 where
 
 #include <libpq-fe.h>
+#include <libpq/libpq-fs.h>
 
 import Prelude hiding ( print )
 import Foreign
@@ -2240,3 +2241,44 @@ foreign import ccall unsafe "libpq-fe.h PQunescapeBytea"
 
 foreign import ccall unsafe "libpq-fe.h &PQfreemem"
     p_PQfreemem :: FunPtr (Ptr a -> IO ())
+
+type CFd = CInt
+
+foreign import ccall unsafe "libpq-fs.h lo_creat"
+    c_lo_creat :: Ptr PGconn -> CInt -> IO Oid
+
+foreign import ccall unsafe "libpq-fs.h lo_create"
+    c_lo_create :: Ptr PGconn -> Oid -> IO Oid
+
+foreign import ccall unsafe "libpq-fs.h lo_import"
+    c_lo_import :: Ptr PGconn -> CString -> IO Oid
+
+foreign import ccall unsafe "libpq-fs.h lo_import_with_oid"
+    c_lo_import_with_oid :: Ptr PGconn -> CString -> Oid -> IO Oid
+
+foreign import ccall unsafe "libpq-fs.h lo_export"
+    c_lo_export :: Ptr PGconn -> Oid -> CString -> IO CInt
+
+foreign import ccall unsafe "libpq-fs.h lo_open"
+    c_lo_open :: Ptr PGconn -> Oid -> CInt -> IO CFd
+
+foreign import ccall unsafe "libpq-fs.h lo_write"
+    c_lo_write :: Ptr PGconn -> CFd -> CString -> CSize -> IO CInt
+
+foreign import ccall unsafe "libpq-fs.h lo_read"
+    c_lo_read :: Ptr PGconn -> CFd -> CString -> CSize -> IO CInt
+
+foreign import ccall unsafe "libpq-fs.h lo_lseek"
+    c_lo_lseek :: Ptr PGconn -> CFd -> CInt -> CInt -> IO CInt
+
+foreign import ccall unsafe "libpq-fs.h lo_tell"
+    c_lo_tell :: Ptr PGconn -> CFd -> IO CInt
+
+foreign import ccall unsafe "libpq-fs.h lo_truncate"
+    c_lo_truncate :: Ptr PGconn -> CFd -> CSize -> IO CInt
+
+foreign import ccall unsafe "libpq-fs.h lo_close"
+    c_lo_close :: Ptr PGconn -> CFd -> IO CInt
+
+foreign import ccall unsafe "libpq-fs.h lo_unlink"
+    c_lo_unlink :: Ptr PGconn -> Oid -> IO CInt
