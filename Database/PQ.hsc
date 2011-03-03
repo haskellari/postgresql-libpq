@@ -1999,9 +1999,7 @@ maybeBsFromForeignPtr fp f =
 loMode :: IOMode -> CInt
 loMode mode = case mode of
                 ReadMode      -> (#const INV_READ)
-                WriteMode     -> (#const INV_WRITE)
-                ReadWriteMode -> (#const INV_READ) .|. (#const INV_WRITE)
-                AppendMode    -> (#const INV_READ) .|. (#const INV_WRITE)
+                _             -> (#const INV_READ) .|. (#const INV_WRITE)
 
 loCreat :: Connection -> IO Oid
 loCreat connection
@@ -2035,14 +2033,15 @@ loOpen :: Connection -> Oid -> IOMode -> IO (Maybe Fd)
 loOpen connection oid mode
     = withConn connection $ \c -> do
         fd <- c_lo_open c oid (loMode mode)
-        -- FIXME:  review this seek throughly, it's probably slightly wrong
-        --         also,  how should errors be handled?
-        _ <- c_lo_lseek c fd 0 $ case mode of
-                                   AppendMode -> #const SEEK_END
-                                   _          -> #const SEEK_SET
-        return $ case fd of
-                   -1 -> Nothing
-                   _  -> Just $ Fd fd
+        case fd of
+          -1 -> Nothing 
+          _ | fd >= 0 -> do
+                  -- FIXME:  review this seek, it's probably slightly wrong
+                  --         also,  how should the error code be handled?
+                  _ <- c_lo_lseek c fd 0 $ case mode of
+                                             AppendMode -> #const SEEK_END
+                                             _          -> #const SEEK_SET
+                  return (Just (Fd fd))
 
 loWrite :: Connection -> Fd -> B.ByteString -> IO Int
 loWrite connection (Fd fd) bytes
