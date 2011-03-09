@@ -1996,6 +1996,8 @@ maybeBsFromForeignPtr fp f =
 --     where
 --       finalizer = touchForeignPtr fp
 
+newtype LoFd = LoFd CInt deriving (Eq, Ord, Show)
+
 loMode :: IOMode -> CInt
 loMode mode = case mode of
                 ReadMode      -> (#const INV_READ)
@@ -2034,7 +2036,7 @@ loExport connection oid filepath
         withCString filepath $ \f -> do
           c_lo_export c oid f
 
-loOpen :: Connection -> Oid -> IOMode -> IO (Maybe Fd)
+loOpen :: Connection -> Oid -> IOMode -> IO (Maybe LoFd)
 loOpen connection oid mode
     = withConn connection $ \c -> do
         fd <- c_lo_open c oid (loMode mode)
@@ -2046,24 +2048,24 @@ loOpen connection oid mode
                   _ <- if mode == AppendMode
                         then c_lo_lseek c fd 0 (#const SEEK_END)
                         else return 0
-                  return (Just (Fd fd))
+                  return (Just (LoFd fd))
 
-loWrite :: Connection -> Fd -> B.ByteString -> IO Int
-loWrite connection (Fd fd) bytes
+loWrite :: Connection -> LoFd -> B.ByteString -> IO Int
+loWrite connection (LoFd fd) bytes
     = withConn connection $ \c -> do
         B.unsafeUseAsCStringLen bytes $ \(byteptr,len) -> do
           nbytes_written <- c_lo_write c fd byteptr (fromIntegral len)
           return (fromIntegral nbytes_written)
 
-loRead :: Connection -> Fd -> Int -> IO B.ByteString
-loRead connection (Fd fd) maxlen
+loRead :: Connection -> LoFd -> Int -> IO B.ByteString
+loRead connection (LoFd fd) maxlen
     = withConn connection $ \c -> do
         allocaBytes maxlen $ \(buf :: CString) -> do
           len <- c_lo_read c fd buf (fromIntegral maxlen)
           B.packCStringLen (buf,fromIntegral len)
 
-loSeek :: Connection -> Fd -> SeekMode -> Int -> IO ()
-loSeek connection (Fd fd) seekmode delta
+loSeek :: Connection -> LoFd -> SeekMode -> Int -> IO ()
+loSeek connection (LoFd fd) seekmode delta
     = withConn connection $ \c -> do
         let d = fromIntegral delta
         -- FIXME:  what should be done with the error code?
@@ -2073,21 +2075,21 @@ loSeek connection (Fd fd) seekmode delta
                                    SeekFromEnd  -> #const SEEK_END
         return ()
 
-loTell :: Connection -> Fd -> IO Int
-loTell connection (Fd fd)
+loTell :: Connection -> LoFd -> IO Int
+loTell connection (LoFd fd)
     = withConn connection $ \c -> do
         pos <- c_lo_tell c fd
         return (fromIntegral pos)
 
-loTruncate :: Connection -> Fd -> Int -> IO ()
-loTruncate connection (Fd fd) size
+loTruncate :: Connection -> LoFd -> Int -> IO ()
+loTruncate connection (LoFd fd) size
     = withConn connection $ \c -> do
         -- FIXME:  what should be done with the error code?
         _ <- c_lo_truncate c fd (fromIntegral size)
         return ()
 
-loClose :: Connection -> Fd -> IO ()
-loClose connection (Fd fd)
+loClose :: Connection -> LoFd -> IO ()
+loClose connection (LoFd fd)
     = withConn connection $ \c -> do
         -- FIXME:  what should be done with the error code?
         _ <- c_lo_close c fd
