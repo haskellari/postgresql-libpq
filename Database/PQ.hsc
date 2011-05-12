@@ -2041,23 +2041,23 @@ loOpen connection oid mode
     = withConn connection $ \c -> do
         fd <- c_lo_open c oid (loMode mode)
         case fd of
-          -1                     -> return Nothing 
+          -1                     -> return Nothing
           _ | mode /= AppendMode -> return (Just (LoFd fd))
-            | otherwise -> do       
-                -- The Large Object API does not directly support AppendMode, 
+            | otherwise -> do
+                -- The Large Object API does not directly support AppendMode,
                 -- so we emulate it.
 
-                -- FIXME:  review this emulation as it and/or the error handling is 
+                -- FIXME:  review this emulation as it and/or the error handling is
                 --         likely to be slightly wrong.  Start by reading the source
-                --         of lo_open, lo_lseek, and lo_close. 
+                --         of lo_open, lo_lseek, and lo_close.
                 err <- c_lo_lseek c fd 0 (#const SEEK_END)
-                case err of 
+                case err of
                   -1 -> do
                           -- the lo_lseek failed, so we try to close the fd
 
-                          -- I'm  not sure what to do if lo_close fails so I am 
+                          -- I'm  not sure what to do if lo_close fails so I am
                           -- ignoring it.  This might obscure the error message
-                          -- available from PQerrorMessage 
+                          -- available from PQerrorMessage
                           _ <- c_lo_close c fd
                           return Nothing
                   _  -> return (Just (LoFd fd))
@@ -2091,7 +2091,7 @@ loTell :: Connection -> LoFd -> IO (Maybe Int)
 loTell connection (LoFd fd)
     = withConn connection $ \c -> do
         pos <- c_lo_tell c fd
-        if pos >= 0 
+        if pos >= 0
           then return (Just (fromIntegral pos))
           else return Nothing
 
@@ -2167,7 +2167,7 @@ foreign import ccall        "libpq-fe.h PQserverVersion"
 foreign import ccall        "libpq-fe.h PQsocket"
     c_PQsocket :: Ptr PGconn -> IO CInt
 
-foreign import ccall unsafe "libpq-fe.h PQerrorMessage"
+foreign import ccall        "libpq-fe.h PQerrorMessage"
     c_PQerrorMessage :: Ptr PGconn -> IO CString
 
 foreign import ccall        "libpq-fe.h &PQfinish"
