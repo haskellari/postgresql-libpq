@@ -2041,14 +2041,27 @@ loOpen connection oid mode
     = withConn connection $ \c -> do
         fd <- c_lo_open c oid (loMode mode)
         case fd of
-          -1 -> return Nothing 
-          _  -> do
-                  -- FIXME:  review this seek, it's probably slightly wrong
-                  --         also,  what should be done with the error code?
-                  _ <- if mode == AppendMode
-                        then c_lo_lseek c fd 0 (#const SEEK_END)
-                        else return 0
-                  return (Just (LoFd fd))
+          -1                     -> return Nothing 
+          _ | mode /= AppendMode -> return (Just (LoFd fd))
+            | otherwise -> do       
+                -- The Large Object API does not directly support AppendMode, 
+                -- so we emulate it.
+
+                -- FIXME:  review this emulation as it and/or the error handling is 
+                --         likely to be slightly wrong.  Start by reading the source
+                --         of lo_open, lo_lseek, and lo_close. 
+                err <- c_lo_lseek c fd 0 (#const SEEK_END)
+                case err of 
+                  -1 -> do
+                          -- the lo_lseek failed, so we try to close the fd
+
+                          -- I'm  not sure what to do if lo_close fails so I am 
+                          -- ignoring it.  This might obscure the error message
+                          -- available from PQerrorMessage 
+                          _ <- c_lo_close c fd
+                          return Nothing
+                  _  -> return (Just (LoFd fd))
+
 
 loWrite :: Connection -> LoFd -> B.ByteString -> IO Int
 loWrite connection (LoFd fd) bytes
@@ -2064,43 +2077,41 @@ loRead connection (LoFd fd) maxlen
           len <- c_lo_read c fd buf (fromIntegral maxlen)
           B.packCStringLen (buf,fromIntegral len)
 
-loSeek :: Connection -> LoFd -> SeekMode -> Int -> IO ()
+loSeek :: Connection -> LoFd -> SeekMode -> Int -> IO Bool
 loSeek connection (LoFd fd) seekmode delta
     = withConn connection $ \c -> do
         let d = fromIntegral delta
-        -- FIXME:  what should be done with the error code?
-        _ <- c_lo_lseek c fd d $ case seekmode of
-                                   AbsoluteSeek -> #const SEEK_SET
-                                   RelativeSeek -> #const SEEK_CUR
-                                   SeekFromEnd  -> #const SEEK_END
-        return ()
+        err <- c_lo_lseek c fd d $ case seekmode of
+                                     AbsoluteSeek -> #const SEEK_SET
+                                     RelativeSeek -> #const SEEK_CUR
+                                     SeekFromEnd  -> #const SEEK_END
+        return (err >= 0)
 
-loTell :: Connection -> LoFd -> IO Int
+loTell :: Connection -> LoFd -> IO (Maybe Int)
 loTell connection (LoFd fd)
     = withConn connection $ \c -> do
         pos <- c_lo_tell c fd
-        return (fromIntegral pos)
+        if pos >= 0 
+          then return (Just (fromIntegral pos))
+          else return Nothing
 
-loTruncate :: Connection -> LoFd -> Int -> IO ()
+loTruncate :: Connection -> LoFd -> Int -> IO Bool
 loTruncate connection (LoFd fd) size
     = withConn connection $ \c -> do
-        -- FIXME:  what should be done with the error code?
-        _ <- c_lo_truncate c fd (fromIntegral size)
-        return ()
+        err <- c_lo_truncate c fd (fromIntegral size)
+        return (err >= 0)
 
-loClose :: Connection -> LoFd -> IO ()
+loClose :: Connection -> LoFd -> IO Bool
 loClose connection (LoFd fd)
     = withConn connection $ \c -> do
-        -- FIXME:  what should be done with the error code?
-        _ <- c_lo_close c fd
-        return ()
+        err <- c_lo_close c fd
+        return (err >= 0)
 
-loUnlink :: Connection -> Oid -> IO ()
+loUnlink :: Connection -> Oid -> IO Bool
 loUnlink connection oid
     = withConn connection $ \c -> do
-        -- FIXME:  what should be done with the error code?
-        _ <- c_lo_unlink c oid
-        return ()
+        err <- c_lo_unlink c oid
+        return (err >= 0)
 
 foreign import ccall safe "libpq-fe.h PQconnectdb"
     c_PQconnectdb :: CString ->IO (Ptr PGconn)
