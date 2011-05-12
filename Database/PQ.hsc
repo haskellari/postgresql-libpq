@@ -1424,7 +1424,7 @@ escapeByteaConn connection bs =
 
 
 -- | Converts a 'ByteString' representation of binary data into binary
--- data — the reverse of 'PQescapeByteaConn'. This is needed when
+-- data - the reverse of 'PQescapeByteaConn'. This is needed when
 -- retrieving bytea data in text format, but not when retrieving it in
 -- binary format.
 --
