@@ -198,6 +198,8 @@ newtype Connection = Conn (MVar (Maybe (ForeignPtr PGconn))) deriving Eq
 data PGconn
 
 
+
+
 -- | Makes a new connection to the database server.
 --
 -- This function opens a new database connection using the parameters
@@ -2278,61 +2280,61 @@ foreign import ccall        "libpq-fe.h PQdescribePortal"
 foreign import ccall        "libpq-fe.h &PQclear"
     p_PQclear :: FunPtr (Ptr PGresult ->IO ())
 
-foreign import ccall        "libpq-fe.h PQresultStatus"
+foreign import ccall unsafe "libpq-fe.h PQresultStatus"
     c_PQresultStatus :: Ptr PGresult -> IO CInt
 
-foreign import ccall        "libpq-fe.h PQresStatus"
+foreign import ccall unsafe "libpq-fe.h PQresStatus"
     c_PQresStatus :: CInt -> IO CString
 
-foreign import ccall        "libpq-fe.h PQresultErrorMessage"
+foreign import ccall unsafe "libpq-fe.h PQresultErrorMessage"
     c_PQresultErrorMessage :: Ptr PGresult -> IO CString
 
 foreign import ccall        "libpq-fe.h PQresultErrorField"
     c_PQresultErrorField :: Ptr PGresult -> CInt -> IO CString
 
-foreign import ccall        "libpq-fe.h PQntuples"
+foreign import ccall unsafe "libpq-fe.h PQntuples"
     c_PQntuples :: Ptr PGresult -> CInt
 
-foreign import ccall        "libpq-fe.h PQnfields"
+foreign import ccall unsafe "libpq-fe.h PQnfields"
     c_PQnfields :: Ptr PGresult -> CInt
 
-foreign import ccall        "libpq-fe.h PQfname"
+foreign import ccall unsafe "libpq-fe.h PQfname"
     c_PQfname :: Ptr PGresult -> CInt -> IO CString
 
 foreign import ccall        "libpq-fe.h PQfnumber"
     c_PQfnumber :: Ptr PGresult -> CString -> IO CInt
 
-foreign import ccall        "libpq-fe.h PQftable"
+foreign import ccall unsafe "libpq-fe.h PQftable"
     c_PQftable :: Ptr PGresult -> CInt -> IO Oid
 
-foreign import ccall        "libpq-fe.h PQftablecol"
+foreign import ccall unsafe "libpq-fe.h PQftablecol"
     c_PQftablecol :: Ptr PGresult -> CInt -> IO CInt
 
-foreign import ccall        "libpq-fe.h PQfformat"
+foreign import ccall unsafe "libpq-fe.h PQfformat"
     c_PQfformat :: Ptr PGresult -> CInt -> IO CInt
 
-foreign import ccall        "libpq-fe.h PQftype"
+foreign import ccall unsafe "libpq-fe.h PQftype"
     c_PQftype :: Ptr PGresult -> CInt -> IO Oid
 
-foreign import ccall        "libpq-fe.h PQfmod"
+foreign import ccall unsafe "libpq-fe.h PQfmod"
     c_PQfmod :: Ptr PGresult -> CInt -> IO CInt
 
-foreign import ccall        "libpq-fe.h PQfsize"
+foreign import ccall unsafe "libpq-fe.h PQfsize"
     c_PQfsize :: Ptr PGresult -> CInt -> IO CInt
 
-foreign import ccall        "libpq-fe.h PQgetvalue"
+foreign import ccall unsafe "libpq-fe.h PQgetvalue"
     c_PQgetvalue :: Ptr PGresult -> CInt -> CInt -> IO CString
 
-foreign import ccall        "libpq-fe.h PQgetisnull"
+foreign import ccall unsafe "libpq-fe.h PQgetisnull"
     c_PQgetisnull :: Ptr PGresult -> CInt -> CInt -> IO CInt
 
-foreign import ccall        "libpq-fe.h PQgetlength"
+foreign import ccall unsafe "libpq-fe.h PQgetlength"
     c_PQgetlength :: Ptr PGresult -> CInt -> CInt -> IO CInt
 
-foreign import ccall        "libpq-fe.h PQnparams"
+foreign import ccall unsafe "libpq-fe.h PQnparams"
     c_PQnparams :: Ptr PGresult -> IO CInt
 
-foreign import ccall        "libpq-fe.h PQparamtype"
+foreign import ccall unsafe "libpq-fe.h PQparamtype"
     c_PQparamtype :: Ptr PGresult -> CInt -> IO Oid
 
 foreign import ccall        "stdio.h fdopen"
@@ -2341,13 +2343,13 @@ foreign import ccall        "stdio.h fdopen"
 foreign import ccall        "libpq-fe.h PQprint"
     c_PQprint :: Ptr CFile -> Ptr PGresult -> Ptr PrintOpt -> IO ()
 
-foreign import ccall        "libpq-fe.h PQcmdStatus"
+foreign import ccall unsafe "libpq-fe.h PQcmdStatus"
     c_PQcmdStatus :: Ptr PGresult -> IO CString
 
-foreign import ccall        "libpq-fe.h PQcmdTuples"
+foreign import ccall unsafe "libpq-fe.h PQcmdTuples"
     c_PQcmdTuples :: Ptr PGresult -> IO CString
 
-foreign import ccall        "libpq-fe.h PQoidValue"
+foreign import ccall unsafe "libpq-fe.h PQoidValue"
     c_PQoidValue :: Ptr PGresult -> IO Oid
 
 foreign import ccall        "libpq-fe.h PQescapeStringConn"
