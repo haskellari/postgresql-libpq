@@ -2113,244 +2113,244 @@ loUnlink connection oid
         err <- c_lo_unlink c oid
         return (err >= 0)
 
-foreign import ccall safe "libpq-fe.h PQconnectdb"
+foreign import ccall        "libpq-fe.h PQconnectdb"
     c_PQconnectdb :: CString ->IO (Ptr PGconn)
 
-foreign import ccall unsafe "libpq-fe.h PQconnectStart"
+foreign import ccall        "libpq-fe.h PQconnectStart"
     c_PQconnectStart :: CString ->IO (Ptr PGconn)
 
-foreign import ccall unsafe "libpq-fe.h PQconnectPoll"
+foreign import ccall        "libpq-fe.h PQconnectPoll"
     c_PQconnectPoll :: Ptr PGconn ->IO CInt
 
-foreign import ccall unsafe "libpq-fe.h PQdb"
+foreign import ccall        "libpq-fe.h PQdb"
     c_PQdb :: Ptr PGconn -> IO CString
 
-foreign import ccall unsafe "libpq-fe.h PQuser"
+foreign import ccall        "libpq-fe.h PQuser"
     c_PQuser :: Ptr PGconn -> IO CString
 
-foreign import ccall unsafe "libpq-fe.h PQpass"
+foreign import ccall        "libpq-fe.h PQpass"
     c_PQpass :: Ptr PGconn -> IO CString
 
-foreign import ccall unsafe "libpq-fe.h PQhost"
+foreign import ccall        "libpq-fe.h PQhost"
     c_PQhost :: Ptr PGconn -> IO CString
 
-foreign import ccall unsafe "libpq-fe.h PQport"
+foreign import ccall        "libpq-fe.h PQport"
     c_PQport :: Ptr PGconn -> IO CString
 
-foreign import ccall unsafe "libpq-fe.h PQoptions"
+foreign import ccall        "libpq-fe.h PQoptions"
     c_PQoptions :: Ptr PGconn -> IO CString
 
-foreign import ccall unsafe "libpq-fe.h PQbackendPID"
+foreign import ccall        "libpq-fe.h PQbackendPID"
     c_PQbackendPID :: Ptr PGconn -> IO CInt
 
-foreign import ccall unsafe "libpq-fe.h PQconnectionNeedsPassword"
+foreign import ccall        "libpq-fe.h PQconnectionNeedsPassword"
     c_PQconnectionNeedsPassword :: Ptr PGconn -> IO CInt
 
-foreign import ccall unsafe "libpq-fe.h PQconnectionUsedPassword"
+foreign import ccall        "libpq-fe.h PQconnectionUsedPassword"
     c_PQconnectionUsedPassword :: Ptr PGconn -> IO CInt
 
-foreign import ccall unsafe "libpq-fe.h PQstatus"
+foreign import ccall        "libpq-fe.h PQstatus"
     c_PQstatus :: Ptr PGconn -> IO CInt
 
-foreign import ccall unsafe "libpq-fe.h PQtransactionStatus"
+foreign import ccall        "libpq-fe.h PQtransactionStatus"
     c_PQtransactionStatus :: Ptr PGconn -> IO CInt
 
-foreign import ccall unsafe "libpq-fe.h PQparameterStatus"
+foreign import ccall        "libpq-fe.h PQparameterStatus"
     c_PQparameterStatus :: Ptr PGconn -> CString -> IO CString
 
-foreign import ccall unsafe "libpq-fe.h PQprotocolVersion"
+foreign import ccall        "libpq-fe.h PQprotocolVersion"
     c_PQprotocolVersion :: Ptr PGconn -> IO CInt
 
-foreign import ccall unsafe "libpq-fe.h PQserverVersion"
+foreign import ccall        "libpq-fe.h PQserverVersion"
     c_PQserverVersion :: Ptr PGconn -> IO CInt
 
-foreign import ccall unsafe "libpq-fe.h PQsocket"
+foreign import ccall        "libpq-fe.h PQsocket"
     c_PQsocket :: Ptr PGconn -> IO CInt
 
 foreign import ccall unsafe "libpq-fe.h PQerrorMessage"
     c_PQerrorMessage :: Ptr PGconn -> IO CString
 
-foreign import ccall unsafe "libpq-fe.h &PQfinish"
+foreign import ccall        "libpq-fe.h &PQfinish"
     p_PQfinish :: FunPtr (Ptr PGconn -> IO ())
 
-foreign import ccall safe "libpq-fe.h PQreset"
+foreign import ccall        "libpq-fe.h PQreset"
     c_PQreset :: Ptr PGconn -> IO ()
 
-foreign import ccall unsafe "libpq-fe.h PQresetStart"
+foreign import ccall        "libpq-fe.h PQresetStart"
     c_PQresetStart :: Ptr PGconn ->IO CInt
 
-foreign import ccall unsafe "libpq-fe.h PQresetPoll"
+foreign import ccall        "libpq-fe.h PQresetPoll"
     c_PQresetPoll :: Ptr PGconn ->IO CInt
 
-foreign import ccall unsafe "libpq-fe.h PQclientEncoding"
+foreign import ccall        "libpq-fe.h PQclientEncoding"
     c_PQclientEncoding :: Ptr PGconn -> IO CInt
 
-foreign import ccall unsafe "libpq-fe.h pg_encoding_to_char"
+foreign import ccall        "libpq-fe.h pg_encoding_to_char"
     c_pg_encoding_to_char :: CInt -> IO CString
 
-foreign import ccall unsafe "libpq-fe.h PQsetClientEncoding"
+foreign import ccall        "libpq-fe.h PQsetClientEncoding"
     c_PQsetClientEncoding :: Ptr PGconn -> CString -> IO CInt
 
 type PGVerbosity = CInt
-foreign import ccall unsafe "libpq-fe.h PQsetErrorVerbosity"
+foreign import ccall        "libpq-fe.h PQsetErrorVerbosity"
     c_PQsetErrorVerbosity :: Ptr PGconn -> PGVerbosity -> IO PGVerbosity
 
-foreign import ccall unsafe "libpq-fe.h PQtrace"
+foreign import ccall        "libpq-fe.h PQtrace"
     c_PQtrace :: Ptr PGconn -> Ptr CFile -> IO ()
 
-foreign import ccall unsafe "libpq-fe.h PQuntrace"
+foreign import ccall        "libpq-fe.h PQuntrace"
     c_PQuntrace :: Ptr PGconn -> IO ()
 
-foreign import ccall unsafe "libpq-fe.h PQsendQuery"
+foreign import ccall        "libpq-fe.h PQsendQuery"
     c_PQsendQuery :: Ptr PGconn -> CString ->IO CInt
 
-foreign import ccall unsafe "libpq-fe.h PQsendQueryParams"
+foreign import ccall        "libpq-fe.h PQsendQueryParams"
     c_PQsendQueryParams :: Ptr PGconn -> CString -> CInt -> Ptr Oid
                         -> Ptr CString -> Ptr CInt -> Ptr CInt -> CInt
                         -> IO CInt
 
-foreign import ccall unsafe "libpq-fe.h PQsendPrepare"
+foreign import ccall        "libpq-fe.h PQsendPrepare"
     c_PQsendPrepare :: Ptr PGconn -> CString -> CString -> CInt -> Ptr Oid
                     -> IO CInt
 
-foreign import ccall unsafe "libpq-fe.h PQsendQueryPrepared"
+foreign import ccall        "libpq-fe.h PQsendQueryPrepared"
     c_PQsendQueryPrepared :: Ptr PGconn -> CString -> CInt -> Ptr CString
                           -> Ptr CInt -> Ptr CInt -> CInt -> IO CInt
 
-foreign import ccall unsafe "libpq-fe.h PQsendDescribePrepared"
+foreign import ccall        "libpq-fe.h PQsendDescribePrepared"
     c_PQsendDescribePrepared :: Ptr PGconn -> CString -> IO CInt
 
-foreign import ccall unsafe "libpq-fe.h PQsendDescribePortal"
+foreign import ccall        "libpq-fe.h PQsendDescribePortal"
     c_PQsendDescribePortal :: Ptr PGconn -> CString -> IO CInt
 
-foreign import ccall unsafe "libpq-fe.h PQflush"
+foreign import ccall        "libpq-fe.h PQflush"
     c_PQflush :: Ptr PGconn -> IO CInt
 
-foreign import ccall unsafe "libpq-fe.h PQgetCancel"
+foreign import ccall        "libpq-fe.h PQgetCancel"
     c_PQgetCancel :: Ptr PGconn -> IO (Ptr PGcancel)
 
-foreign import ccall unsafe "libpq-fe.h &PQfreeCancel"
+foreign import ccall        "libpq-fe.h &PQfreeCancel"
     p_PQfreeCancel :: FunPtr (Ptr PGcancel -> IO ())
 
-foreign import ccall unsafe "libpq-fe.h PQcancel"
+foreign import ccall        "libpq-fe.h PQcancel"
     c_PQcancel :: Ptr PGcancel -> CString -> CInt -> IO CInt
 
-foreign import ccall unsafe "libpq-fe.h PQnotifies"
+foreign import ccall        "libpq-fe.h PQnotifies"
     c_PQnotifies :: Ptr PGconn -> IO (Ptr Notify)
 
-foreign import ccall unsafe "libpq-fe.h PQconsumeInput"
+foreign import ccall        "libpq-fe.h PQconsumeInput"
     c_PQconsumeInput :: Ptr PGconn ->IO CInt
 
-foreign import ccall unsafe "libpq-fe.h PQisBusy"
+foreign import ccall        "libpq-fe.h PQisBusy"
     c_PQisBusy :: Ptr PGconn -> IO CInt
 
-foreign import ccall unsafe "libpq-fe.h PQsetnonblocking"
+foreign import ccall        "libpq-fe.h PQsetnonblocking"
     c_PQsetnonblocking :: Ptr PGconn -> CInt -> IO CInt
 
-foreign import ccall unsafe "libpq-fe.h PQisnonblocking"
+foreign import ccall        "libpq-fe.h PQisnonblocking"
     c_PQisnonblocking :: Ptr PGconn -> IO CInt
 
-foreign import ccall unsafe "libpq-fe.h PQgetResult"
+foreign import ccall        "libpq-fe.h PQgetResult"
     c_PQgetResult :: Ptr PGconn -> IO (Ptr PGresult)
 
-foreign import ccall safe "libpq-fe.h PQexec"
+foreign import ccall        "libpq-fe.h PQexec"
     c_PQexec :: Ptr PGconn -> CString -> IO (Ptr PGresult)
 
-foreign import ccall safe "libpq-fe.h PQexecParams"
+foreign import ccall        "libpq-fe.h PQexecParams"
     c_PQexecParams :: Ptr PGconn -> CString -> CInt -> Ptr Oid
                    -> Ptr CString -> Ptr CInt -> Ptr CInt -> CInt
                    -> IO (Ptr PGresult)
 
-foreign import ccall safe "libpq-fe.h PQprepare"
+foreign import ccall        "libpq-fe.h PQprepare"
     c_PQprepare :: Ptr PGconn -> CString -> CString -> CInt -> Ptr Oid
                 -> IO (Ptr PGresult)
 
-foreign import ccall safe "libpq-fe.h PQexecPrepared"
+foreign import ccall        "libpq-fe.h PQexecPrepared"
     c_PQexecPrepared :: Ptr PGconn -> CString -> CInt -> Ptr CString
                      -> Ptr CInt -> Ptr CInt -> CInt -> IO (Ptr PGresult)
 
-foreign import ccall safe "libpq-fe.h PQdescribePrepared"
+foreign import ccall        "libpq-fe.h PQdescribePrepared"
     c_PQdescribePrepared :: Ptr PGconn -> CString -> IO (Ptr PGresult)
 
-foreign import ccall safe "libpq-fe.h PQdescribePortal"
+foreign import ccall        "libpq-fe.h PQdescribePortal"
     c_PQdescribePortal :: Ptr PGconn -> CString -> IO (Ptr PGresult)
 
-foreign import ccall unsafe "libpq-fe.h &PQclear"
+foreign import ccall        "libpq-fe.h &PQclear"
     p_PQclear :: FunPtr (Ptr PGresult ->IO ())
 
-foreign import ccall unsafe "libpq-fe.h PQresultStatus"
+foreign import ccall        "libpq-fe.h PQresultStatus"
     c_PQresultStatus :: Ptr PGresult -> IO CInt
 
-foreign import ccall unsafe "libpq-fe.h PQresStatus"
+foreign import ccall        "libpq-fe.h PQresStatus"
     c_PQresStatus :: CInt -> IO CString
 
-foreign import ccall unsafe "libpq-fe.h PQresultErrorMessage"
+foreign import ccall        "libpq-fe.h PQresultErrorMessage"
     c_PQresultErrorMessage :: Ptr PGresult -> IO CString
 
-foreign import ccall unsafe "libpq-fe.h PQresultErrorField"
+foreign import ccall        "libpq-fe.h PQresultErrorField"
     c_PQresultErrorField :: Ptr PGresult -> CInt -> IO CString
 
-foreign import ccall unsafe "libpq-fe.h PQntuples"
+foreign import ccall        "libpq-fe.h PQntuples"
     c_PQntuples :: Ptr PGresult -> CInt
 
-foreign import ccall unsafe "libpq-fe.h PQnfields"
+foreign import ccall        "libpq-fe.h PQnfields"
     c_PQnfields :: Ptr PGresult -> CInt
 
-foreign import ccall unsafe "libpq-fe.h PQfname"
+foreign import ccall        "libpq-fe.h PQfname"
     c_PQfname :: Ptr PGresult -> CInt -> IO CString
 
-foreign import ccall unsafe "libpq-fe.h PQfnumber"
+foreign import ccall        "libpq-fe.h PQfnumber"
     c_PQfnumber :: Ptr PGresult -> CString -> IO CInt
 
-foreign import ccall unsafe "libpq-fe.h PQftable"
+foreign import ccall        "libpq-fe.h PQftable"
     c_PQftable :: Ptr PGresult -> CInt -> IO Oid
 
-foreign import ccall unsafe "libpq-fe.h PQftablecol"
+foreign import ccall        "libpq-fe.h PQftablecol"
     c_PQftablecol :: Ptr PGresult -> CInt -> IO CInt
 
-foreign import ccall unsafe "libpq-fe.h PQfformat"
+foreign import ccall        "libpq-fe.h PQfformat"
     c_PQfformat :: Ptr PGresult -> CInt -> IO CInt
 
-foreign import ccall unsafe "libpq-fe.h PQftype"
+foreign import ccall        "libpq-fe.h PQftype"
     c_PQftype :: Ptr PGresult -> CInt -> IO Oid
 
-foreign import ccall unsafe "libpq-fe.h PQfmod"
+foreign import ccall        "libpq-fe.h PQfmod"
     c_PQfmod :: Ptr PGresult -> CInt -> IO CInt
 
-foreign import ccall unsafe "libpq-fe.h PQfsize"
+foreign import ccall        "libpq-fe.h PQfsize"
     c_PQfsize :: Ptr PGresult -> CInt -> IO CInt
 
-foreign import ccall unsafe "libpq-fe.h PQgetvalue"
+foreign import ccall        "libpq-fe.h PQgetvalue"
     c_PQgetvalue :: Ptr PGresult -> CInt -> CInt -> IO CString
 
-foreign import ccall unsafe "libpq-fe.h PQgetisnull"
+foreign import ccall        "libpq-fe.h PQgetisnull"
     c_PQgetisnull :: Ptr PGresult -> CInt -> CInt -> IO CInt
 
-foreign import ccall unsafe "libpq-fe.h PQgetlength"
+foreign import ccall        "libpq-fe.h PQgetlength"
     c_PQgetlength :: Ptr PGresult -> CInt -> CInt -> IO CInt
 
-foreign import ccall unsafe "libpq-fe.h PQnparams"
+foreign import ccall        "libpq-fe.h PQnparams"
     c_PQnparams :: Ptr PGresult -> IO CInt
 
-foreign import ccall unsafe "libpq-fe.h PQparamtype"
+foreign import ccall        "libpq-fe.h PQparamtype"
     c_PQparamtype :: Ptr PGresult -> CInt -> IO Oid
 
-foreign import ccall unsafe "stdio.h fdopen"
+foreign import ccall        "stdio.h fdopen"
     c_fdopen :: CInt -> CString -> IO (Ptr CFile)
 
-foreign import ccall unsafe "libpq-fe.h PQprint"
+foreign import ccall        "libpq-fe.h PQprint"
     c_PQprint :: Ptr CFile -> Ptr PGresult -> Ptr PrintOpt -> IO ()
 
-foreign import ccall unsafe "libpq-fe.h PQcmdStatus"
+foreign import ccall        "libpq-fe.h PQcmdStatus"
     c_PQcmdStatus :: Ptr PGresult -> IO CString
 
-foreign import ccall unsafe "libpq-fe.h PQcmdTuples"
+foreign import ccall        "libpq-fe.h PQcmdTuples"
     c_PQcmdTuples :: Ptr PGresult -> IO CString
 
-foreign import ccall unsafe "libpq-fe.h PQoidValue"
+foreign import ccall        "libpq-fe.h PQoidValue"
     c_PQoidValue :: Ptr PGresult -> IO Oid
 
-foreign import ccall unsafe "libpq-fe.h PQescapeStringConn"
+foreign import ccall        "libpq-fe.h PQescapeStringConn"
     c_PQescapeStringConn :: Ptr PGconn
                          -> Ptr Word8 -- Actually (CString)
                          -> CString
@@ -2358,58 +2358,58 @@ foreign import ccall unsafe "libpq-fe.h PQescapeStringConn"
                          -> Ptr CInt
                          -> IO CSize
 
-foreign import ccall unsafe "libpq-fe.h PQescapeByteaConn"
+foreign import ccall        "libpq-fe.h PQescapeByteaConn"
     c_PQescapeByteaConn :: Ptr PGconn
                         -> CString -- Actually (Ptr CUChar)
                         -> CSize
                         -> Ptr CSize
                         -> IO (Ptr Word8) -- Actually (IO (Ptr CUChar))
 
-foreign import ccall unsafe "libpq-fe.h PQunescapeBytea"
+foreign import ccall        "libpq-fe.h PQunescapeBytea"
     c_PQunescapeBytea :: CString -- Actually (Ptr CUChar)
                       -> Ptr CSize
                       -> IO (Ptr Word8) -- Actually (IO (Ptr CUChar))
 
-foreign import ccall unsafe "libpq-fe.h &PQfreemem"
+foreign import ccall        "libpq-fe.h &PQfreemem"
     p_PQfreemem :: FunPtr (Ptr a -> IO ())
 
 type CFd = CInt
 
-foreign import ccall unsafe "libpq-fs.h lo_creat"
+foreign import ccall        "libpq-fs.h lo_creat"
     c_lo_creat :: Ptr PGconn -> CInt -> IO Oid
 
-foreign import ccall unsafe "libpq-fs.h lo_create"
+foreign import ccall        "libpq-fs.h lo_create"
     c_lo_create :: Ptr PGconn -> Oid -> IO Oid
 
-foreign import ccall unsafe "libpq-fs.h lo_import"
+foreign import ccall        "libpq-fs.h lo_import"
     c_lo_import :: Ptr PGconn -> CString -> IO Oid
 
-foreign import ccall unsafe "libpq-fs.h lo_import_with_oid"
+foreign import ccall        "libpq-fs.h lo_import_with_oid"
     c_lo_import_with_oid :: Ptr PGconn -> CString -> Oid -> IO Oid
 
-foreign import ccall unsafe "libpq-fs.h lo_export"
+foreign import ccall        "libpq-fs.h lo_export"
     c_lo_export :: Ptr PGconn -> Oid -> CString -> IO CInt
 
-foreign import ccall unsafe "libpq-fs.h lo_open"
+foreign import ccall        "libpq-fs.h lo_open"
     c_lo_open :: Ptr PGconn -> Oid -> CInt -> IO CFd
 
-foreign import ccall unsafe "libpq-fs.h lo_write"
+foreign import ccall        "libpq-fs.h lo_write"
     c_lo_write :: Ptr PGconn -> CFd -> CString -> CSize -> IO CInt
 
-foreign import ccall unsafe "libpq-fs.h lo_read"
+foreign import ccall        "libpq-fs.h lo_read"
     c_lo_read :: Ptr PGconn -> CFd -> CString -> CSize -> IO CInt
 
-foreign import ccall unsafe "libpq-fs.h lo_lseek"
+foreign import ccall        "libpq-fs.h lo_lseek"
     c_lo_lseek :: Ptr PGconn -> CFd -> CInt -> CInt -> IO CInt
 
-foreign import ccall unsafe "libpq-fs.h lo_tell"
+foreign import ccall        "libpq-fs.h lo_tell"
     c_lo_tell :: Ptr PGconn -> CFd -> IO CInt
 
-foreign import ccall unsafe "libpq-fs.h lo_truncate"
+foreign import ccall        "libpq-fs.h lo_truncate"
     c_lo_truncate :: Ptr PGconn -> CFd -> CSize -> IO CInt
 
-foreign import ccall unsafe "libpq-fs.h lo_close"
+foreign import ccall        "libpq-fs.h lo_close"
     c_lo_close :: Ptr PGconn -> CFd -> IO CInt
 
-foreign import ccall unsafe "libpq-fs.h lo_unlink"
+foreign import ccall        "libpq-fs.h lo_unlink"
     c_lo_unlink :: Ptr PGconn -> Oid -> IO CInt
