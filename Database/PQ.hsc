@@ -2124,49 +2124,49 @@ foreign import ccall        "libpq-fe.h PQconnectStart"
 foreign import ccall        "libpq-fe.h PQconnectPoll"
     c_PQconnectPoll :: Ptr PGconn ->IO CInt
 
-foreign import ccall        "libpq-fe.h PQdb"
+foreign import ccall unsafe "libpq-fe.h PQdb"
     c_PQdb :: Ptr PGconn -> IO CString
 
-foreign import ccall        "libpq-fe.h PQuser"
+foreign import ccall unsafe "libpq-fe.h PQuser"
     c_PQuser :: Ptr PGconn -> IO CString
 
-foreign import ccall        "libpq-fe.h PQpass"
+foreign import ccall unsafe "libpq-fe.h PQpass"
     c_PQpass :: Ptr PGconn -> IO CString
 
-foreign import ccall        "libpq-fe.h PQhost"
+foreign import ccall unsafe "libpq-fe.h PQhost"
     c_PQhost :: Ptr PGconn -> IO CString
 
-foreign import ccall        "libpq-fe.h PQport"
+foreign import ccall unsafe "libpq-fe.h PQport"
     c_PQport :: Ptr PGconn -> IO CString
 
-foreign import ccall        "libpq-fe.h PQoptions"
+foreign import ccall unsafe "libpq-fe.h PQoptions"
     c_PQoptions :: Ptr PGconn -> IO CString
 
-foreign import ccall        "libpq-fe.h PQbackendPID"
+foreign import ccall unsafe "libpq-fe.h PQbackendPID"
     c_PQbackendPID :: Ptr PGconn -> IO CInt
 
-foreign import ccall        "libpq-fe.h PQconnectionNeedsPassword"
+foreign import ccall unsafe "libpq-fe.h PQconnectionNeedsPassword"
     c_PQconnectionNeedsPassword :: Ptr PGconn -> IO CInt
 
-foreign import ccall        "libpq-fe.h PQconnectionUsedPassword"
+foreign import ccall unsafe "libpq-fe.h PQconnectionUsedPassword"
     c_PQconnectionUsedPassword :: Ptr PGconn -> IO CInt
 
-foreign import ccall        "libpq-fe.h PQstatus"
+foreign import ccall unsafe "libpq-fe.h PQstatus"
     c_PQstatus :: Ptr PGconn -> IO CInt
 
-foreign import ccall        "libpq-fe.h PQtransactionStatus"
+foreign import ccall unsafe "libpq-fe.h PQtransactionStatus"
     c_PQtransactionStatus :: Ptr PGconn -> IO CInt
 
 foreign import ccall        "libpq-fe.h PQparameterStatus"
     c_PQparameterStatus :: Ptr PGconn -> CString -> IO CString
 
-foreign import ccall        "libpq-fe.h PQprotocolVersion"
+foreign import ccall unsafe "libpq-fe.h PQprotocolVersion"
     c_PQprotocolVersion :: Ptr PGconn -> IO CInt
 
-foreign import ccall        "libpq-fe.h PQserverVersion"
+foreign import ccall unsafe "libpq-fe.h PQserverVersion"
     c_PQserverVersion :: Ptr PGconn -> IO CInt
 
-foreign import ccall        "libpq-fe.h PQsocket"
+foreign import ccall unsafe "libpq-fe.h PQsocket"
     c_PQsocket :: Ptr PGconn -> IO CInt
 
 foreign import ccall        "libpq-fe.h PQerrorMessage"
@@ -2184,7 +2184,7 @@ foreign import ccall        "libpq-fe.h PQresetStart"
 foreign import ccall        "libpq-fe.h PQresetPoll"
     c_PQresetPoll :: Ptr PGconn ->IO CInt
 
-foreign import ccall        "libpq-fe.h PQclientEncoding"
+foreign import ccall unsafe "libpq-fe.h PQclientEncoding"
     c_PQclientEncoding :: Ptr PGconn -> IO CInt
 
 foreign import ccall        "libpq-fe.h pg_encoding_to_char"
@@ -2194,7 +2194,7 @@ foreign import ccall        "libpq-fe.h PQsetClientEncoding"
     c_PQsetClientEncoding :: Ptr PGconn -> CString -> IO CInt
 
 type PGVerbosity = CInt
-foreign import ccall        "libpq-fe.h PQsetErrorVerbosity"
+foreign import ccall unsafe "libpq-fe.h PQsetErrorVerbosity"
     c_PQsetErrorVerbosity :: Ptr PGconn -> PGVerbosity -> IO PGVerbosity
 
 foreign import ccall        "libpq-fe.h PQtrace"
@@ -2249,7 +2249,7 @@ foreign import ccall        "libpq-fe.h PQisBusy"
 foreign import ccall        "libpq-fe.h PQsetnonblocking"
     c_PQsetnonblocking :: Ptr PGconn -> CInt -> IO CInt
 
-foreign import ccall        "libpq-fe.h PQisnonblocking"
+foreign import ccall unsafe "libpq-fe.h PQisnonblocking"
     c_PQisnonblocking :: Ptr PGconn -> IO CInt
 
 foreign import ccall        "libpq-fe.h PQgetResult"
@@ -2372,7 +2372,7 @@ foreign import ccall        "libpq-fe.h PQunescapeBytea"
                       -> Ptr CSize
                       -> IO (Ptr Word8) -- Actually (IO (Ptr CUChar))
 
-foreign import ccall        "libpq-fe.h &PQfreemem"
+foreign import ccall unsafe "libpq-fe.h &PQfreemem"
     p_PQfreemem :: FunPtr (Ptr a -> IO ())
 
 type CFd = CInt
