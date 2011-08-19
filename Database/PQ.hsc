@@ -1,9 +1,47 @@
-{-# LANGUAGE ForeignFunctionInterface, EmptyDataDecls, OverloadedStrings, ScopedTypeVariables #-}
-
--- | This is a binding to libpq: the C application programmer's
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  Database.PQ
+-- Copyright   :  (c) 2010 Grant Monroe,
+--                (c) 2011 Leon P Smith
+-- License     :  BSD3
+--
+-- Maintainer  :  leon@melding-monads.com
+-- Stability   :  experimental
+--
+-- This is a binding to libpq: the C application programmer's
 -- interface to PostgreSQL. libpq is a set of library functions that
 -- allow client programs to pass queries to the PostgreSQL backend
 -- server and to receive the results of these queries.
+--
+-- This is intended to be a very low-level interface to libpq.  It
+-- provides memory management and a consistent interface to error
+-- conditions.  Application code should typically use a higher-level
+-- PostgreSQL binding.
+--
+-- This interface is not safe,  because libpq unfortunately conflates
+-- explicit disconnects with memory management.   A use-after-free memory
+-- fault will result if a connection is used in any way after 'finish' is
+-- called.  This will likely cause a segfault,  or return an error if memory
+-- has not yet been reused.  Other more bizarre behaviors are possible,
+-- though unlikely by chance.  Higher-level bindings need to be aware of
+-- this issue and need to ensure that application code cannot cause the
+-- functions in this module to be called on an 'finish'ed connection.
+--
+-- One possibility is to represent a connection in a higher-level interface
+-- as @MVar (Maybe Connection)@, using @Nothing@ to represent an explicitly
+-- disconnected state.  This was done in an earlier incarnation of this
+-- library,  however this was removed because a higher level binding is
+-- likely to use a similar construct to deal with other issues.  Thus
+-- incorporating that in this module results in extra layers of indirection
+-- for relatively little functionality.
+--
+-----------------------------------------------------------------------------
+
+{-# LANGUAGE ForeignFunctionInterface #-}
+{-# LANGUAGE EmptyDataDecls           #-}
+{-# LANGUAGE OverloadedStrings        #-}
+{-# LANGUAGE ScopedTypeVariables      #-}
+
 module Database.PQ
     (
     -- * Database Connection Control Functions
@@ -172,7 +210,6 @@ import GHC.IO.Handle ( hDuplicate )
 import GHC.Handle ( hDuplicate )
 #endif
 import System.Posix.IO ( handleToFd )
-import Control.Concurrent.MVar
 import System.Posix.Types ( CPid )
 
 import Data.ByteString.Char8 ()
@@ -181,7 +218,6 @@ import qualified Data.ByteString.Internal as B ( fromForeignPtr
                                                , c_strlen
                                                )
 import qualified Data.ByteString as B
-
 
 -- $dbconn
 -- The following functions deal with making a connection to a
@@ -194,11 +230,8 @@ import qualified Data.ByteString as B
 -- via the connection object.
 
 -- | 'Connection' encapsulates a connection to the backend.
-newtype Connection = Conn (MVar (Maybe (ForeignPtr PGconn))) deriving Eq
+newtype Connection = Conn (ForeignPtr PGconn) deriving Eq
 data PGconn
-
-
-
 
 -- | Makes a new connection to the database server.
 --
@@ -219,10 +252,7 @@ connectdb conninfo =
     do connPtr <- B.useAsCString conninfo c_PQconnectdb
        if connPtr == nullPtr
            then fail "libpq failed to allocate a PGconn structure"
-           else do fp <- newForeignPtr p_PQfinish connPtr
-                   mvar <- newMVar $ Just fp
-                   return $ Conn mvar
-
+           else Conn `fmap` newForeignPtr p_PQfinish connPtr
 
 -- | Make a connection to the database server in a nonblocking manner.
 connectStart :: B.ByteString -- ^ Connection Info
@@ -231,9 +261,7 @@ connectStart connStr =
     do connPtr <- B.useAsCString connStr c_PQconnectStart
        if connPtr == nullPtr
            then fail "libpq failed to allocate a PGconn structure"
-           else do fp <- newForeignPtr p_PQfinish connPtr
-                   mvar <- newMVar $ Just fp
-                   return $ Conn mvar
+           else Conn `fmap` newForeignPtr p_PQfinish connPtr
 
 
 -- | If 'connectStart' succeeds, the next stage is to poll libpq so
@@ -342,12 +370,8 @@ pollHelper poller connection =
 -- has been called.
 finish :: Connection
        -> IO ()
-finish (Conn mvar) =
-    do mFp <- takeMVar mvar
-       case mFp of
-         Nothing -> putMVar mvar Nothing
-         Just fp -> do finalizeForeignPtr fp
-                       putMVar mvar Nothing
+finish (Conn fp) =
+    do finalizeForeignPtr fp
 
 
 -- $connstatus
@@ -1899,13 +1923,7 @@ withConn connection f =
 withConn' :: Connection
           -> (ForeignPtr PGconn -> IO b)
           -> IO b
-withConn' (Conn mvar) f =
-    withMVar mvar $ \mFp ->
-        case mFp of
-          Nothing -> error "Database connection has been closed"
-          Just fp -> f fp
-
-
+withConn' (Conn fp) f = f fp
 
 
 enumFromConn :: (Integral a, Enum b) => Connection
@@ -1997,6 +2015,9 @@ maybeBsFromForeignPtr fp f =
 --                      return $ B.fromForeignPtr fp' 0 l
 --     where
 --       finalizer = touchForeignPtr fp
+
+-- | LoFd is a Large Object (pseudo) File Descriptor.  It is understood by
+-- libpq but not by operating system calls.
 
 newtype LoFd = LoFd CInt deriving (Eq, Ord, Show)
 
