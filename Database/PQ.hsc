@@ -41,6 +41,7 @@
 {-# LANGUAGE EmptyDataDecls           #-}
 {-# LANGUAGE OverloadedStrings        #-}
 {-# LANGUAGE ScopedTypeVariables      #-}
+{-# LANGUAGE BangPatterns             #-}
 
 module Database.PQ
     (
@@ -708,16 +709,16 @@ execParams connection statement params rFmt =
                                    c_PQexecParams c s n ts vs ls fs f
 
     where
-      accum (a,b,c,d) Nothing = ( 0:a
-                                , Nothing:b
-                                , 0:c
-                                , 0:d
-                                )
-      accum (a,b,c,d) (Just (t,v,f)) = ( t:a
-                                       , (Just v):b
-                                       , (B.length v):c
-                                       , (toEnum $ fromEnum f):d
-                                       )
+      accum (!a,!b,!c,!d) Nothing = ( 0:a
+                                    , Nothing:b
+                                    , 0:c
+                                    , 0:d
+                                    )
+      accum (!a,!b,!c,!d) (Just (t,v,f)) = ( t:a
+                                           , (Just v):b
+                                           , (B.length v):c
+                                           , (toEnum $ fromEnum f):d
+                                           )
 
 
 -- | Submits a request to create a prepared statement with the given
@@ -806,14 +807,14 @@ execPrepared connection stmtName mPairs rFmt =
                                c_PQexecPrepared c s n vs ls fs f
 
     where
-      accum (a,b,c) Nothing       = ( Nothing:a
-                                    , 0:b
-                                    , 0:c
-                                    )
-      accum (a,b,c) (Just (v, f)) = ( (Just v):a
-                                    , (B.length v):b
-                                    , (toEnum $ fromEnum f):c
-                                    )
+      accum (!a,!b,!c) Nothing       = ( Nothing:a
+                                       , 0:b
+                                       , 0:c
+                                       )
+      accum (!a,!b,!c) (Just (v, f)) = ( (Just v):a
+                                       , (B.length v):b
+                                       , (toEnum $ fromEnum f):c
+                                       )
 
 
 -- | Submits a request to obtain information about the specified
@@ -1541,16 +1542,16 @@ sendQueryParams connection statement params rFmt =
                                    c_PQsendQueryParams c s n ts vs ls fs f
 
     where
-      accum (a,b,c,d) Nothing = ( 0:a
-                                , Nothing:b
-                                , 0:c
-                                , 0:d
-                                )
-      accum (a,b,c,d) (Just (t,v,f)) = ( t:a
-                                       , (Just v):b
-                                       , (B.length v):c
-                                       , (toEnum $ fromEnum f):d
-                                       )
+      accum (!a,!b,!c,!d) Nothing = ( 0:a
+                                    , Nothing:b
+                                    , 0:c
+                                    , 0:d
+                                    )
+      accum (!a,!b,!c,!d) (Just (t,v,f)) = ( t:a
+                                           , (Just v):b
+                                           , (B.length v):c
+                                           , (toEnum $ fromEnum f):d
+                                           )
 
 
 -- | Sends a request to create a prepared statement with the given
@@ -1590,14 +1591,14 @@ sendQueryPrepared connection stmtName mPairs rFmt =
                                c_PQsendQueryPrepared c s n vs ls fs f
 
     where
-      accum (a,b,c) Nothing       = ( Nothing:a
-                                    , 0:b
-                                    , 0:c
-                                    )
-      accum (a,b,c) (Just (v, f)) = ( (Just v):a
-                                    , (B.length v):b
-                                    , (toEnum $ fromEnum f):c
-                                    )
+      accum (!a,!b,!c) Nothing       = ( Nothing:a
+                                       , 0:b
+                                       , 0:c
+                                       )
+      accum (!a,!b,!c) (Just (v, f)) = ( (Just v):a
+                                       , (B.length v):b
+                                       , (toEnum $ fromEnum f):c
+                                       )
 
 
 -- | Submits a request to obtain information about the specified
