@@ -1,5 +1,5 @@
-Name:                libpq
-Version:             0.4.1
+Name:                postgresql-libpq
+Version:             0.1
 Synopsis:            libpq binding for Haskell
 
 Description:         This is a binding to libpq: the C application
@@ -9,11 +9,11 @@ Description:         This is a binding to libpq: the C application
                      backend server and to receive the results of
                      these queries.
 
-Homepage:            http://github.com/tnarg/haskell-libpq
+Homepage:            http://github.com/lpsmith/haskell-libpq
 License:             BSD3
 License-file:        LICENSE
-Author:              Grant Monroe
-Maintainer:          grant@tnarg.com
+Author:              Grant Monroe, Leon P Smith
+Maintainer:          leon@melding-monads.com
 -- Copyright:
 Category:            Database
 Build-type:          Custom
