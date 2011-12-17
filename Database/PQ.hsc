@@ -210,6 +210,9 @@ import GHC.IO.Handle ( hDuplicate )
 #else
 import GHC.Handle ( hDuplicate )
 #endif
+#if __GLASGOW_HASKELL__ >= 700
+import GHC.Conc ( closeFdWith )  -- Won't work with GHC 7.0.1
+#endif
 import System.Posix.IO ( handleToFd )
 import System.Posix.Types ( CPid )
 
@@ -253,7 +256,11 @@ connectdb conninfo =
     do connPtr <- B.useAsCString conninfo c_PQconnectdb
        if connPtr == nullPtr
            then fail "libpq failed to allocate a PGconn structure"
+#if __GLASGOW_HASKELL__ >= 700
+           else Conn `fmap` FC.newForeignPtr connPtr (pqfinish connPtr)
+#else
            else Conn `fmap` newForeignPtr p_PQfinish connPtr
+#endif
 
 -- | Make a connection to the database server in a nonblocking manner.
 connectStart :: B.ByteString -- ^ Connection Info
@@ -262,8 +269,23 @@ connectStart connStr =
     do connPtr <- B.useAsCString connStr c_PQconnectStart
        if connPtr == nullPtr
            then fail "libpq failed to allocate a PGconn structure"
+#if __GLASGOW_HASKELL__ >= 700
+           else Conn `fmap` FC.newForeignPtr connPtr (pqfinish connPtr)
+#else
            else Conn `fmap` newForeignPtr p_PQfinish connPtr
+#endif
 
+#if __GLASGOW_HASKELL__ >= 700
+pqfinish :: Ptr PGconn -> IO ()
+pqfinish conn = do
+   mfd <- c_PQsocket conn
+   case mfd of
+     -1 -> do
+              -- Not sure what to do here,  but this shouldn't be possible
+              c_PQfinish conn
+              fail "Database.PQ.Connection finalizer:  impossible error"
+     fd -> closeFdWith (\_ -> c_PQfinish conn) (Fd fd)
+#endif
 
 -- | If 'connectStart' succeeds, the next stage is to poll libpq so
 -- that it can proceed with the connection sequence. Use 'socket' to
@@ -2194,8 +2216,13 @@ foreign import ccall unsafe "libpq-fe.h PQsocket"
 foreign import ccall        "libpq-fe.h PQerrorMessage"
     c_PQerrorMessage :: Ptr PGconn -> IO CString
 
-foreign import ccall        "libpq-fe.h &PQfinish"
+#if __GLASGOW_HASKELL__ >= 700
+foreign import ccall        "libpq-fe.h cPQfinish"
+    c_PQfinish :: Ptr PGconn -> IO ()
+#else
+foreign import ccall        "libpq-fe.h &cPQfinish"
     p_PQfinish :: FunPtr (Ptr PGconn -> IO ())
+#endif
 
 foreign import ccall        "libpq-fe.h PQreset"
     c_PQreset :: Ptr PGconn -> IO ()
