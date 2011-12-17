@@ -175,6 +175,7 @@ module Database.PQ
     , trace
     , untrace
 
+    , LoFd(..)
     , loCreat
     , loCreate
     , loImport
