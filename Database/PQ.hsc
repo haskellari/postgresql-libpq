@@ -2217,10 +2217,10 @@ foreign import ccall        "libpq-fe.h PQerrorMessage"
     c_PQerrorMessage :: Ptr PGconn -> IO CString
 
 #if __GLASGOW_HASKELL__ >= 700
-foreign import ccall        "libpq-fe.h cPQfinish"
+foreign import ccall        "libpq-fe.h PQfinish"
     c_PQfinish :: Ptr PGconn -> IO ()
 #else
-foreign import ccall        "libpq-fe.h &cPQfinish"
+foreign import ccall        "libpq-fe.h &PQfinish"
     p_PQfinish :: FunPtr (Ptr PGconn -> IO ())
 #endif
 
