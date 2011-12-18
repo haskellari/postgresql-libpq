@@ -1846,8 +1846,10 @@ notifies connection =
         do mn <- c_PQnotifies ptr
            if mn == nullPtr
              then return Nothing
-             else Just `fmap` peek mn
-
+             else do
+                     result <- Just `fmap` peek mn
+                     c_PQfreemem mn
+                     return result
 
 
 -- $control
@@ -2424,6 +2426,9 @@ foreign import ccall        "libpq-fe.h PQunescapeBytea"
 
 foreign import ccall unsafe "libpq-fe.h &PQfreemem"
     p_PQfreemem :: FunPtr (Ptr a -> IO ())
+
+foreign import ccall unsafe "libpq-fe.h PQfreemem"
+    c_PQfreemem :: Ptr a -> IO ()
 
 type CFd = CInt
 
