@@ -37,11 +37,12 @@
 --
 -----------------------------------------------------------------------------
 
-{-# LANGUAGE ForeignFunctionInterface #-}
-{-# LANGUAGE EmptyDataDecls           #-}
-{-# LANGUAGE OverloadedStrings        #-}
-{-# LANGUAGE ScopedTypeVariables      #-}
-{-# LANGUAGE BangPatterns             #-}
+{-# LANGUAGE ForeignFunctionInterface   #-}
+{-# LANGUAGE EmptyDataDecls             #-}
+{-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE BangPatterns               #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 module Database.PQ
     (
@@ -104,8 +105,8 @@ module Database.PQ
     -- $queryresultinfo
     , ntuples
     , nfields
-    , Row
-    , Column
+    , Row(..)
+    , Column(..)
     , toRow
     , toColumn
     , fname
@@ -1089,19 +1090,19 @@ resultErrorField (Result fp) fieldcode =
 -- it returns an integer result, large result sets might overflow the
 -- return value on 32-bit operating systems.
 ntuples :: Result
-        -> IO Int
-ntuples (Result res) = withForeignPtr res (return . fromEnum . c_PQntuples)
+        -> IO Row
+ntuples (Result res) = withForeignPtr res (return . toRow . c_PQntuples)
 
 
 -- | Returns the number of columns (fields) in each row of the query
 -- result.
 nfields :: Result
-        -> IO Int
-nfields (Result res) = withForeignPtr res (return . fromEnum . c_PQnfields)
+        -> IO Column
+nfields (Result res) = withForeignPtr res (return . toColumn . c_PQnfields)
 
 
-newtype Column = Col CInt
-newtype Row = Row CInt
+newtype Column = Col CInt  deriving (Eq, Ord, Show, Enum, Num)
+newtype Row    = Row CInt  deriving (Eq, Ord, Show, Enum, Num)
 
 toColumn :: (Integral a) => a -> Column
 toColumn = Col . fromIntegral
@@ -1123,14 +1124,14 @@ fname result (Col colNum) =
 -- | Returns the column number associated with the given column name.
 fnumber :: Result
         -> B.ByteString
-        -> IO (Maybe Int)
+        -> IO (Maybe Column)
 fnumber (Result res) columnName =
     do num <- withForeignPtr res $ \resPtr ->
               B.useAsCString columnName $ \columnNamePtr ->
                   c_PQfnumber resPtr columnNamePtr
        return $ if num == -1
                   then Nothing
-                  else Just $ fromIntegral num
+                  else Just $ toColumn num
 
 
 -- | Returns the OID of the table from which the given column was
