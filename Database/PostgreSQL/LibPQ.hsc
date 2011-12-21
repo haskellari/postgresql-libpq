@@ -44,7 +44,7 @@
 {-# LANGUAGE BangPatterns               #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
-module Database.PQ
+module Database.PostgreSQL.LibPQ
     (
     -- * Database Connection Control Functions
     -- $dbconn
