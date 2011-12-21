@@ -647,7 +647,7 @@ connectionUsedPassword connection =
 newtype Result = Result (ForeignPtr PGresult) deriving (Eq, Show)
 data PGresult
 
-data Format = Text | Binary deriving Enum
+data Format = Text | Binary deriving (Eq, Ord, Show, Enum)
 
 type Oid = CUInt
 
