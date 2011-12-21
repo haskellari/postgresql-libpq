@@ -89,6 +89,7 @@ module Database.PQ
     , exec
     , Format(..)
     , Oid
+    , invalidOid
     , execParams
     , prepare
     , execPrepared
@@ -649,8 +650,10 @@ data PGresult
 
 data Format = Text | Binary deriving (Eq, Ord, Show, Enum)
 
-type Oid = CUInt
+newtype Oid = Oid CUInt deriving (Eq, Ord, Read, Show, Storable)
 
+invalidOid :: Oid
+invalidOid = Oid (#const InvalidOid)
 
 -- | Submits a command to the server and waits for the result.
 --
@@ -733,7 +736,7 @@ execParams connection statement params rFmt =
                                    c_PQexecParams c s n ts vs ls fs f
 
     where
-      accum (!a,!b,!c,!d) Nothing = ( 0:a
+      accum (!a,!b,!c,!d) Nothing = ( invalidOid:a
                                     , Nothing:b
                                     , 0:c
                                     , 0:d
@@ -1426,10 +1429,7 @@ oidValue :: Result
 oidValue result =
     withResult result $ \ptr ->
         do oid <- c_PQoidValue ptr
-           return $ case oid of
-                      (#const InvalidOid) -> Nothing
-                      _                   -> Just oid
-
+           return $ toMaybeOid oid
 
 -- | Escapes a string for use within an SQL command. This is useful
 -- when inserting data values as literal constants in SQL
@@ -1566,7 +1566,7 @@ sendQueryParams connection statement params rFmt =
                                    c_PQsendQueryParams c s n ts vs ls fs f
 
     where
-      accum (!a,!b,!c,!d) Nothing = ( 0:a
+      accum (!a,!b,!c,!d) Nothing = ( invalidOid:a
                                     , Nothing:b
                                     , 0:c
                                     , 0:d
@@ -1807,7 +1807,7 @@ cancel (Cancel fp) =
 -- ordinary SQL commands. The arrival of NOTIFY messages can
 -- subsequently be detected by calling 'notifies'.
 
-data Notify = Notify {
+data Notify = Notify { 
       notifyRelname :: B.ByteString -- ^ notification channel name
     , notifyBePid   :: CPid         -- ^ process ID of notifying server process
     , notifyExtra   :: B.ByteString -- ^ notification payload string
@@ -2054,9 +2054,9 @@ loMode mode = case mode of
                 _             -> (#const INV_READ) .|. (#const INV_WRITE)
 
 toMaybeOid :: Oid -> Maybe Oid
-toMaybeOid oid = case oid of
-                   0 -> Nothing
-                   _ -> Just oid
+toMaybeOid oid | oid == invalidOid = Nothing
+               | otherwise         = Just oid
+{-# INLINE toMaybeOid #-}
 
 loCreat :: Connection -> IO (Maybe Oid)
 loCreat connection
