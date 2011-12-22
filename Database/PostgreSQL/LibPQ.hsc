@@ -88,7 +88,7 @@ module Database.PostgreSQL.LibPQ
     , Result
     , exec
     , Format(..)
-    , Oid
+    , Oid(..)
     , invalidOid
     , execParams
     , prepare
