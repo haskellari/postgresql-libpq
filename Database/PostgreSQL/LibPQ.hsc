@@ -283,10 +283,9 @@ pqfinish :: Ptr PGconn -> IO ()
 pqfinish conn = do
    mfd <- c_PQsocket conn
    case mfd of
-     -1 -> do
-              -- Not sure what to do here,  but this shouldn't be possible
-              c_PQfinish conn
-              fail "Database.PQ.Connection finalizer:  impossible error"
+     -1 -> -- This can happen if the connection is bad/lost
+           -- This case may be worth investigating further
+           c_PQfinish conn
      fd -> closeFdWith (\_ -> c_PQfinish conn) (Fd fd)
 #endif
 
@@ -1807,7 +1806,7 @@ cancel (Cancel fp) =
 -- ordinary SQL commands. The arrival of NOTIFY messages can
 -- subsequently be detected by calling 'notifies'.
 
-data Notify = Notify { 
+data Notify = Notify {
       notifyRelname :: B.ByteString -- ^ notification channel name
     , notifyBePid   :: CPid         -- ^ process ID of notifying server process
     , notifyExtra   :: B.ByteString -- ^ notification payload string
