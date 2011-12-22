@@ -14,9 +14,9 @@
 -- server and to receive the results of these queries.
 --
 -- This is intended to be a very low-level interface to libpq.  It
--- provides memory management and a consistent interface to error
--- conditions.  Application code should typically use a higher-level
--- PostgreSQL binding.
+-- provides memory management and a somewhat more consistent interface 
+-- to error conditions.  Application code should typically use a 
+-- higher-level PostgreSQL binding.
 --
 -- This interface is not safe,  because libpq unfortunately conflates
 -- explicit disconnects with memory management.   A use-after-free memory
@@ -202,8 +202,7 @@ import Foreign
 import Foreign.C.Types
 import Foreign.C.String
 import qualified Foreign.Concurrent as FC
-import GHC.Conc ( -- threadWaitRead
-                 threadWaitWrite)
+import GHC.Conc ( threadWaitWrite )
 import System.Posix.Types ( Fd(..) )
 import Data.List ( foldl' )
 import System.IO ( Handle, IOMode(..), SeekMode(..) )
