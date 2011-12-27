@@ -2179,13 +2179,19 @@ loWrite connection (LoFd fd) bytes
 -- descriptor @fd@.  In the event of an error,  'Nothing' is returned.
 
 loRead :: Connection -> LoFd -> Int -> IO (Maybe B.ByteString)
-loRead connection (LoFd fd) maxlen
+loRead connection (LoFd !fd) !maxlen
     = withConn connection $ \c -> do
-        allocaBytes maxlen $ \(buf :: CString) -> do
-          len <- c_lo_read c fd buf (fromIntegral maxlen)
-          if len < 0
-            then return Nothing
-            else Just `fmap` B.packCStringLen (buf,fromIntegral len)
+        buf <- mallocBytes maxlen
+        len_ <- c_lo_read c fd buf (fromIntegral maxlen)
+        let len = fromIntegral len_
+        if len < 0
+          then do
+                  free buf
+                  return Nothing
+          else do
+                  bufre <- reallocBytes buf len
+                  buffp <- newForeignPtr finalizerFree bufre
+                  return (Just (B.fromForeignPtr buffp 0 len))
 
 -- | Changes the current read or write location associated with
 -- a large object descriptor.    The return value is the new location
@@ -2529,7 +2535,7 @@ foreign import ccall        "libpq-fs.h lo_write"
     c_lo_write :: Ptr PGconn -> CFd -> CString -> CSize -> IO CInt
 
 foreign import ccall        "libpq-fs.h lo_read"
-    c_lo_read :: Ptr PGconn -> CFd -> CString -> CSize -> IO CInt
+    c_lo_read :: Ptr PGconn -> CFd -> Ptr Word8 -> CSize -> IO CInt
 
 foreign import ccall        "libpq-fs.h lo_lseek"
     c_lo_lseek :: Ptr PGconn -> CFd -> CInt -> CInt -> IO CInt
