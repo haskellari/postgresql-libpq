@@ -2081,16 +2081,16 @@ loCreat connection
 -- | Creates a new large object with a particular Object ID.  Returns
 -- 'Nothing' if the requested Object ID is already in use by some other
 -- large object or other failure.  If 'invalidOid' is used as a parameter,
--- then 'loCreate' will assign an unused 'Oid'. 
+-- then 'loCreate' will assign an unused 'Oid'.
 
 loCreate :: Connection -> Oid -> IO (Maybe Oid)
 loCreate connection oid
     = withConn connection $ \c -> do
         toMaybeOid `fmap` c_lo_create c oid
 
--- | Imports an operating system file as a large object.  Note that the 
--- file is read by the client interface library, not by the server; so it 
--- must exist in the client file system and be readable by the client 
+-- | Imports an operating system file as a large object.  Note that the
+-- file is read by the client interface library, not by the server; so it
+-- must exist in the client file system and be readable by the client
 -- application.
 
 loImport :: Connection -> FilePath -> IO (Maybe Oid)
@@ -2122,12 +2122,12 @@ loExport connection oid filepath
 -- the large object to open.  A large object cannot be opened before it is
 -- created.  A large object descriptor is returned for later use in 'loRead',
 -- 'loWrite', 'loSeek', 'loTell', and 'loClose'.   The descriptor is only valid
--- for the duration of the current transation.   On failure,  'Nothing' is 
+-- for the duration of the current transation.   On failure,  'Nothing' is
 -- returned.
 --
--- The server currently does not distinguish between 'WriteMode' and 
+-- The server currently does not distinguish between 'WriteMode' and
 -- 'ReadWriteMode',  write-only modes are not enforced.  However there
--- is a significant difference 'ReadMode' and the rest:  with 'ReadMode' 
+-- is a significant difference 'ReadMode' and the rest:  with 'ReadMode'
 -- you cannot write on the descriptor,  and the data read from it will
 -- reflect the contents of the large object at the time of the transaction
 -- snapshot that was active when 'loOpen' was executed,  regardless of later
@@ -2135,7 +2135,7 @@ loExport connection oid filepath
 -- in 'WriteMode', 'ReadWriteMode', or 'AppendMode' returns data that reflects
 -- all writes of other committed transactions as well as the writes of the
 -- current transaction.   This is similar to the behavior of @REPEATABLE READ@
--- versus @READ COMMITTED@ transaction modes for ordinary SQL @SELECT@ 
+-- versus @READ COMMITTED@ transaction modes for ordinary SQL @SELECT@
 -- commands.
 
 loOpen :: Connection -> Oid -> IOMode -> IO (Maybe LoFd)
@@ -2149,9 +2149,9 @@ loOpen connection oid mode
                 -- The Large Object API does not directly support AppendMode,
                 -- so we emulate it.
 
-                -- FIXME:  review this emulation as it and/or the error 
-                --         handling is likely to be slightly wrong.  Start by 
-                --         reading the source of lo_open, lo_lseek, and 
+                -- FIXME:  review this emulation as it and/or the error
+                --         handling is likely to be slightly wrong.  Start by
+                --         reading the source of lo_open, lo_lseek, and
                 --         lo_close.
                 err <- c_lo_lseek c fd 0 (#const SEEK_END)
                 case err of
@@ -2166,7 +2166,7 @@ loOpen connection oid mode
                   _  -> return (Just (LoFd fd))
 
 -- | @loWrite conn fd buf@ writes the bytestring @buf@ to the large object
--- descriptor @fd@.  The number of bytes actually written is returned.  
+-- descriptor @fd@.  The number of bytes actually written is returned.
 -- In the event of an error, 'Nothing' is returned.
 
 loWrite :: Connection -> LoFd -> B.ByteString -> IO (Maybe Int)
@@ -2175,7 +2175,7 @@ loWrite connection (LoFd fd) bytes
         B.unsafeUseAsCStringLen bytes $ \(byteptr,len) -> do
           nonnegInt `fmap` c_lo_write c fd byteptr (fromIntegral len)
 
--- | @loRead conn fd len@ reads up to @len@ bytes from the large object 
+-- | @loRead conn fd len@ reads up to @len@ bytes from the large object
 -- descriptor @fd@.  In the event of an error,  'Nothing' is returned.
 
 loRead :: Connection -> LoFd -> Int -> IO (Maybe B.ByteString)
@@ -2184,10 +2184,10 @@ loRead connection (LoFd fd) maxlen
         allocaBytes maxlen $ \(buf :: CString) -> do
           len <- c_lo_read c fd buf (fromIntegral maxlen)
           if len < 0
-            then return Nothing 
+            then return Nothing
             else Just `fmap` B.packCStringLen (buf,fromIntegral len)
 
--- | Changes the current read or write location associated with 
+-- | Changes the current read or write location associated with
 -- a large object descriptor.    The return value is the new location
 -- pointer,  or 'Nothing' on error.
 
