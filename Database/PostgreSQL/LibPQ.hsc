@@ -2126,17 +2126,17 @@ loExport connection oid filepath
 -- returned.
 --
 -- The server currently does not distinguish between 'WriteMode' and
--- 'ReadWriteMode',  write-only modes are not enforced.  However there
--- is a significant difference 'ReadMode' and the rest:  with 'ReadMode'
--- you cannot write on the descriptor,  and the data read from it will
--- reflect the contents of the large object at the time of the transaction
--- snapshot that was active when 'loOpen' was executed,  regardless of later
--- writes by this or other transactions.   Reading from a descriptor opened
--- in 'WriteMode', 'ReadWriteMode', or 'AppendMode' returns data that reflects
--- all writes of other committed transactions as well as the writes of the
--- current transaction.   This is similar to the behavior of @REPEATABLE READ@
--- versus @READ COMMITTED@ transaction modes for ordinary SQL @SELECT@
--- commands.
+-- 'ReadWriteMode';  write-only modes are not enforced.  However there
+-- is a significant difference between 'ReadMode' and the other modes:
+-- with 'ReadMode' you cannot write on the descriptor,  and the data read
+-- from it will reflect the contents of the large object at the time of
+-- the transaction snapshot that was active when 'loOpen' was executed,
+-- regardless of later writes by this or other transactions.   Reading from
+-- a descriptor opened in 'WriteMode', 'ReadWriteMode', or 'AppendMode'
+-- returns data that reflects all writes of other committed transactions
+-- as well as the writes of the current transaction.   This is similar to
+-- the behavior of @REPEATABLE READ@ versus @READ COMMITTED@ transaction
+-- modes for ordinary SQL @SELECT@ commands.
 
 loOpen :: Connection -> Oid -> IOMode -> IO (Maybe LoFd)
 loOpen connection oid mode
