@@ -14,8 +14,8 @@
 -- server and to receive the results of these queries.
 --
 -- This is intended to be a very low-level interface to libpq.  It
--- provides memory management and a somewhat more consistent interface 
--- to error conditions.  Application code should typically use a 
+-- provides memory management and a somewhat more consistent interface
+-- to error conditions.  Application code should typically use a
 -- higher-level PostgreSQL binding.
 --
 -- This interface is not safe,  because libpq unfortunately conflates
@@ -177,6 +177,8 @@ module Database.PostgreSQL.LibPQ
     , trace
     , untrace
 
+    -- * Large Objects
+    -- $largeobjects
     , LoFd(..)
     , loCreat
     , loCreate
@@ -2041,6 +2043,8 @@ maybeBsFromForeignPtr fp f =
 --     where
 --       finalizer = touchForeignPtr fp
 
+-- $largeobjects
+
 -- | LoFd is a Large Object (pseudo) File Descriptor.  It is understood by
 -- libpq but not by operating system calls.
 
@@ -2049,22 +2053,45 @@ newtype LoFd = LoFd CInt deriving (Eq, Ord, Show)
 loMode :: IOMode -> CInt
 loMode mode = case mode of
                 ReadMode      -> (#const INV_READ)
-                _             -> (#const INV_READ) .|. (#const INV_WRITE)
+                WriteMode     -> (#const INV_WRITE)
+                ReadWriteMode -> (#const INV_READ) .|. (#const INV_WRITE)
+                AppendMode    -> (#const INV_WRITE)
 
 toMaybeOid :: Oid -> Maybe Oid
 toMaybeOid oid | oid == invalidOid = Nothing
                | otherwise         = Just oid
 {-# INLINE toMaybeOid #-}
 
+nonnegInt :: CInt -> Maybe Int
+nonnegInt x = if x < 0 then Nothing else Just (fromIntegral x)
+{-# INLINE nonnegInt #-}
+
+negError  :: CInt -> Maybe ()
+negError x = if x < 0 then Nothing else Just ()
+{-# INLINE negError #-}
+
+-- | Creates a new large object,  returns the Object ID of the newly created
+-- object.
+
 loCreat :: Connection -> IO (Maybe Oid)
 loCreat connection
     = withConn connection $ \c -> do
         toMaybeOid `fmap` c_lo_creat c (loMode ReadMode)
 
+-- | Creates a new large object with a particular Object ID.  Returns
+-- 'Nothing' if the requested Object ID is already in use by some other
+-- large object or other failure.  If 'invalidOid' is used as a parameter,
+-- then 'loCreate' will assign an unused 'Oid'. 
+
 loCreate :: Connection -> Oid -> IO (Maybe Oid)
 loCreate connection oid
     = withConn connection $ \c -> do
         toMaybeOid `fmap` c_lo_create c oid
+
+-- | Imports an operating system file as a large object.  Note that the 
+-- file is read by the client interface library, not by the server; so it 
+-- must exist in the client file system and be readable by the client 
+-- application.
 
 loImport :: Connection -> FilePath -> IO (Maybe Oid)
 loImport connection filepath
@@ -2072,17 +2099,44 @@ loImport connection filepath
         withCString filepath $ \f -> do
           toMaybeOid `fmap` c_lo_import c f
 
+-- | Imports an operating system file as a large object with the given
+-- Object ID.  Combines the behavior of 'loImport' and 'loCreate'
+
 loImportWithOid :: Connection -> FilePath -> Oid -> IO (Maybe Oid)
 loImportWithOid connection filepath oid
     = withConn connection $ \c -> do
         withCString filepath $ \f -> do
           toMaybeOid `fmap` c_lo_import_with_oid c f oid
 
-loExport :: Connection -> Oid -> FilePath -> IO CInt
+-- | Exports a large object into a operating system file.  Note that
+-- the file is written by the client interface library, not the server.
+-- Returns 'Just ()' on success,  'Nothing' on failure.
+
+loExport :: Connection -> Oid -> FilePath -> IO (Maybe ())
 loExport connection oid filepath
     = withConn connection $ \c -> do
         withCString filepath $ \f -> do
-          c_lo_export c oid f
+          negError `fmap` c_lo_export c oid f
+
+-- | Opens an existing large object for reading or writing.  The Oid specifies
+-- the large object to open.  A large object cannot be opened before it is
+-- created.  A large object descriptor is returned for later use in 'loRead',
+-- 'loWrite', 'loSeek', 'loTell', and 'loClose'.   The descriptor is only valid
+-- for the duration of the current transation.   On failure,  'Nothing' is 
+-- returned.
+--
+-- The server currently does not distinguish between 'WriteMode' and 
+-- 'ReadWriteMode',  write-only modes are not enforced.  However there
+-- is a significant difference 'ReadMode' and the rest:  with 'ReadMode' 
+-- you cannot write on the descriptor,  and the data read from it will
+-- reflect the contents of the large object at the time of the transaction
+-- snapshot that was active when 'loOpen' was executed,  regardless of later
+-- writes by this or other transactions.   Reading from a descriptor opened
+-- in 'WriteMode', 'ReadWriteMode', or 'AppendMode' returns data that reflects
+-- all writes of other committed transactions as well as the writes of the
+-- current transaction.   This is similar to the behavior of @REPEATABLE READ@
+-- versus @READ COMMITTED@ transaction modes for ordinary SQL @SELECT@ 
+-- commands.
 
 loOpen :: Connection -> Oid -> IOMode -> IO (Maybe LoFd)
 loOpen connection oid mode
@@ -2095,9 +2149,10 @@ loOpen connection oid mode
                 -- The Large Object API does not directly support AppendMode,
                 -- so we emulate it.
 
-                -- FIXME:  review this emulation as it and/or the error handling is
-                --         likely to be slightly wrong.  Start by reading the source
-                --         of lo_open, lo_lseek, and lo_close.
+                -- FIXME:  review this emulation as it and/or the error 
+                --         handling is likely to be slightly wrong.  Start by 
+                --         reading the source of lo_open, lo_lseek, and 
+                --         lo_close.
                 err <- c_lo_lseek c fd 0 (#const SEEK_END)
                 case err of
                   -1 -> do
@@ -2110,56 +2165,77 @@ loOpen connection oid mode
                           return Nothing
                   _  -> return (Just (LoFd fd))
 
+-- | @loWrite conn fd buf@ writes the bytestring @buf@ to the large object
+-- descriptor @fd@.  The number of bytes actually written is returned.  
+-- In the event of an error, 'Nothing' is returned.
 
-loWrite :: Connection -> LoFd -> B.ByteString -> IO Int
+loWrite :: Connection -> LoFd -> B.ByteString -> IO (Maybe Int)
 loWrite connection (LoFd fd) bytes
     = withConn connection $ \c -> do
         B.unsafeUseAsCStringLen bytes $ \(byteptr,len) -> do
-          nbytes_written <- c_lo_write c fd byteptr (fromIntegral len)
-          return (fromIntegral nbytes_written)
+          nonnegInt `fmap` c_lo_write c fd byteptr (fromIntegral len)
 
-loRead :: Connection -> LoFd -> Int -> IO B.ByteString
+-- | @loRead conn fd len@ reads up to @len@ bytes from the large object 
+-- descriptor @fd@.  In the event of an error,  'Nothing' is returned.
+
+loRead :: Connection -> LoFd -> Int -> IO (Maybe B.ByteString)
 loRead connection (LoFd fd) maxlen
     = withConn connection $ \c -> do
         allocaBytes maxlen $ \(buf :: CString) -> do
           len <- c_lo_read c fd buf (fromIntegral maxlen)
-          B.packCStringLen (buf,fromIntegral len)
+          if len < 0
+            then return Nothing 
+            else Just `fmap` B.packCStringLen (buf,fromIntegral len)
 
-loSeek :: Connection -> LoFd -> SeekMode -> Int -> IO Bool
+-- | Changes the current read or write location associated with 
+-- a large object descriptor.    The return value is the new location
+-- pointer,  or 'Nothing' on error.
+
+loSeek :: Connection -> LoFd -> SeekMode -> Int -> IO (Maybe Int)
 loSeek connection (LoFd fd) seekmode delta
     = withConn connection $ \c -> do
         let d = fromIntegral delta
-        err <- c_lo_lseek c fd d $ case seekmode of
+        pos <- c_lo_lseek c fd d $ case seekmode of
                                      AbsoluteSeek -> #const SEEK_SET
                                      RelativeSeek -> #const SEEK_CUR
                                      SeekFromEnd  -> #const SEEK_END
-        return (err >= 0)
+        return (nonnegInt pos)
+
+-- | Obtains the current read or write location of a large object descriptor.
 
 loTell :: Connection -> LoFd -> IO (Maybe Int)
 loTell connection (LoFd fd)
     = withConn connection $ \c -> do
-        pos <- c_lo_tell c fd
-        if pos >= 0
-          then return (Just (fromIntegral pos))
-          else return Nothing
+        nonnegInt `fmap` c_lo_tell c fd
 
-loTruncate :: Connection -> LoFd -> Int -> IO Bool
+-- | Truncates a large object to a given length.  If the length is greater
+-- than the current large object,  then the large object is extended with
+-- null bytes.  ('\x00')
+--
+-- The file offest is not changed.
+--
+-- 'loTruncate' is new as of PostgreSQL 8.3; if this function is run against
+-- an older server version, it will fail and return 'Nothing'
+
+loTruncate :: Connection -> LoFd -> Int -> IO (Maybe ())
 loTruncate connection (LoFd fd) size
     = withConn connection $ \c -> do
-        err <- c_lo_truncate c fd (fromIntegral size)
-        return (err >= 0)
+        negError `fmap` c_lo_truncate c fd (fromIntegral size)
 
-loClose :: Connection -> LoFd -> IO Bool
+-- | Closes a large object descriptor.  Any large object descriptors that
+-- remain open at the end of a transaction will be closed automatically.
+
+loClose :: Connection -> LoFd -> IO (Maybe ())
 loClose connection (LoFd fd)
     = withConn connection $ \c -> do
-        err <- c_lo_close c fd
-        return (err >= 0)
+        negError `fmap` c_lo_close c fd
 
-loUnlink :: Connection -> Oid -> IO Bool
+-- | Removes a large object from the database.
+
+loUnlink :: Connection -> Oid -> IO (Maybe ())
 loUnlink connection oid
     = withConn connection $ \c -> do
-        err <- c_lo_unlink c oid
-        return (err >= 0)
+        negError `fmap` c_lo_unlink c oid
 
 foreign import ccall        "libpq-fe.h PQconnectdb"
     c_PQconnectdb :: CString ->IO (Ptr PGconn)
