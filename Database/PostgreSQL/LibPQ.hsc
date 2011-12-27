@@ -375,7 +375,7 @@ data PollingStatus
     = PollingFailed
     | PollingReading
     | PollingWriting
-    | PollingOk deriving Show
+    | PollingOk deriving (Eq, Show)
 
 pollHelper :: (Ptr PGconn -> IO CInt)
            -> Connection
@@ -466,7 +466,7 @@ data ConnStatus
     | ConnectionSetEnv             -- ^ Negotiating environment-driven
                                    -- parameter settings.
     | ConnectionSSLStartup         -- ^ Negotiating SSL encryption.
-      deriving Show
+      deriving (Eq, Show)
 
 
 -- | Returns the status of the connection.
@@ -905,7 +905,7 @@ data ExecStatus = EmptyQuery    -- ^ The string sent to the server was empty.
                 | NonfatalError -- ^ A nonfatal error (a notice or
                                 -- warning) occurred.
                 | FatalError    -- ^ A fatal error occurred.
-                  deriving Show
+                  deriving (Eq, Show)
 
 instance Enum ExecStatus where
     toEnum (#const PGRES_EMPTY_QUERY)    = EmptyQuery
@@ -1741,7 +1741,7 @@ flush connection =
 
 -- | Contains the information needed to cancel a command issued
 -- through a particular database connection.
-newtype Cancel = Cancel (ForeignPtr PGcancel) deriving Eq
+newtype Cancel = Cancel (ForeignPtr PGcancel) deriving (Eq, Show)
 data PGcancel
 
 
@@ -1880,7 +1880,7 @@ setClientEncoding connection enc =
 
 data Verbosity = ErrorsTerse
                | ErrorsDefault
-               | ErrorsVerbose deriving (Show, Eq)
+               | ErrorsVerbose deriving (Eq, Show)
 
 instance Enum Verbosity where
     toEnum (#const PQERRORS_TERSE)   = ErrorsTerse
