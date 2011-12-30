@@ -101,6 +101,7 @@ module Database.PostgreSQL.LibPQ
     , resultErrorMessage
     , FieldCode(..)
     , resultErrorField
+    , unsafeFreeResult
 
     -- * Retrieving Query Result Information
     -- $queryresultinfo
@@ -950,6 +951,18 @@ resStatus es =
 resultErrorMessage :: Result
                    -> IO (Maybe B.ByteString)
 resultErrorMessage = flip maybeBsFromResult c_PQresultErrorMessage
+
+-- | Frees the memory associated with a result.  Note that using this
+-- function correctly is especially tricky;  you need to ensure that
+-- no references to the result.   This means no references to a value
+-- returned by 'getvalue',  no references hiding inside an unevaluated
+-- thunk,  etc.    Improper use of this function is likely to cause a
+-- segfault.   Also,  the use of this function is not strictly necessary;
+-- the memory will get freed by the garbage collector when there are no
+-- more references to the result.
+
+unsafeFreeResult :: Result -> IO ()
+unsafeFreeResult (Result x) = finalizeForeignPtr x
 
 
 data FieldCode = DiagSeverity
