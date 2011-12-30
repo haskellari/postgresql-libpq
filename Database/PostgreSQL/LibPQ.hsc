@@ -1,6 +1,6 @@
 -----------------------------------------------------------------------------
 -- |
--- Module      :  Database.PQ
+-- Module      :  Database.PostgreSQL.LibPQ
 -- Copyright   :  (c) 2010 Grant Monroe,
 --                (c) 2011 Leon P Smith
 -- License     :  BSD3
