@@ -52,6 +52,8 @@ module Database.PostgreSQL.LibPQ
     , connectdb
     , connectStart
     , connectPoll
+    , newNullConnection
+    , isNullConnection
     --, conndefaults
     --, conninfoParse
     , reset
@@ -290,6 +292,16 @@ pqfinish conn = do
            c_PQfinish conn
      fd -> closeFdWith (\_ -> c_PQfinish conn) (Fd fd)
 #endif
+
+-- | Allocate a Null Connection,  which all libpq functions
+-- should safely fail on.
+newNullConnection :: IO Connection
+newNullConnection = Conn `fmap` newForeignPtr_ nullPtr
+
+-- | Test if a connection is the Null Connection.
+isNullConnection :: Connection -> Bool
+isNullConnection (Conn x) = unsafeForeignPtrToPtr x == nullPtr
+{-# INLINE isNullConnection #-}
 
 -- | If 'connectStart' succeeds, the next stage is to poll libpq so
 -- that it can proceed with the connection sequence. Use 'socket' to
