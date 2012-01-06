@@ -1,5 +1,5 @@
 Name:                postgresql-libpq
-Version:             0.6.1
+Version:             0.6.2
 Synopsis:            low-level binding to libpq
 
 Description:         This is a binding to libpq: the C application
@@ -39,4 +39,4 @@ source-repository head
 source-repository this
   type:     git
   location: http://github.com/lpsmith/postgresql-libpq
-  tag:      v0.6.1
+  tag:      v0.6.2
