@@ -127,7 +127,6 @@ module Database.PostgreSQL.LibPQ
     , getlength
     , nparams
     , paramtype
-    , print
     , PrintOpt(..)
     , defaultPrintOpt
 
@@ -177,8 +176,6 @@ module Database.PostgreSQL.LibPQ
     , setClientEncoding
     , Verbosity(..)
     , setErrorVerbosity
-    , trace
-    , untrace
 
     -- * Large Objects
     -- $largeobjects
@@ -207,20 +204,13 @@ import Foreign
 import Foreign.C.Types
 import Foreign.C.String
 import qualified Foreign.Concurrent as FC
-import GHC.Conc ( threadWaitWrite )
 import System.Posix.Types ( Fd(..) )
 import Data.List ( foldl' )
-import System.IO ( Handle, IOMode(..), SeekMode(..) )
+import System.IO ( IOMode(..), SeekMode(..) )
 
-#if __GLASGOW_HASKELL__ >= 611
-import GHC.IO.Handle ( hDuplicate )
-#else
-import GHC.Handle ( hDuplicate )
-#endif
 #if __GLASGOW_HASKELL__ >= 700
 import GHC.Conc ( closeFdWith )  -- Won't work with GHC 7.0.1
 #endif
-import System.Posix.IO ( handleToFd )
 import System.Posix.Types ( CPid )
 
 import Data.ByteString.Char8 ()
@@ -1393,27 +1383,6 @@ instance Storable PrintOpt where
                 #{poke PQprintOpt, fieldName} ptr j''
 
 
--- | Prints out all the rows and, optionally, the column names to the
--- specified output stream.
---
--- This function was formerly used by psql to print query results, but
--- this is no longer the case. Note that it assumes all the data is in
--- text format.
-print :: Handle
-      -> Result
-      -> PrintOpt
-      -> IO ()
-print h (Result res) po =
-    withForeignPtr res $ \resPtr -> do
-      B.useAsCString "w" $ \mode -> do
-        with po $ \poPtr -> do
-          dup_h <- hDuplicate h
-          fd <- handleToFd dup_h
-          threadWaitWrite fd
-          cfile <- c_fdopen (fromIntegral fd) mode
-          c_PQprint cfile resPtr poPtr
-
-
 -- $othercommands
 -- These functions are used to extract other information from PGresult
 -- objects.
@@ -1937,34 +1906,6 @@ setErrorVerbosity connection verbosity =
     enumFromConn connection $ \p ->
         c_PQsetErrorVerbosity p $ fromIntegral $ fromEnum verbosity
 
-
--- | Enables tracing of the client/server communication to a debugging
--- file stream.
---
--- Note: On Windows, if the libpq library and an application are
--- compiled with different flags, this function call will crash the
--- application because the internal representation of the FILE
--- pointers differ. Specifically, multithreaded/single-threaded,
--- release/debug, and static/dynamic flags should be the same for the
--- library and all applications using that library.
-trace :: Connection
-      -> Handle
-      -> IO ()
-trace connection h =
-    withConn connection $ \ptr ->
-      B.useAsCString "w" $ \mode -> do
-        dup_h <- hDuplicate h
-        fd <- handleToFd dup_h
-        cfile <- c_fdopen (fromIntegral fd) mode
-        c_PQtrace ptr cfile
-
-
--- | Disables tracing started by PQtrace.
-untrace :: Connection
-        -> IO ()
-untrace connection = withConn connection c_PQuntrace
-
-
 withConn :: Connection
          -> (Ptr PGconn -> IO b)
          -> IO b
@@ -2355,12 +2296,6 @@ type PGVerbosity = CInt
 foreign import ccall unsafe "libpq-fe.h PQsetErrorVerbosity"
     c_PQsetErrorVerbosity :: Ptr PGconn -> PGVerbosity -> IO PGVerbosity
 
-foreign import ccall        "libpq-fe.h PQtrace"
-    c_PQtrace :: Ptr PGconn -> Ptr CFile -> IO ()
-
-foreign import ccall        "libpq-fe.h PQuntrace"
-    c_PQuntrace :: Ptr PGconn -> IO ()
-
 foreign import ccall        "libpq-fe.h PQsendQuery"
     c_PQsendQuery :: Ptr PGconn -> CString ->IO CInt
 
@@ -2494,12 +2429,6 @@ foreign import ccall unsafe "libpq-fe.h PQnparams"
 
 foreign import ccall unsafe "libpq-fe.h PQparamtype"
     c_PQparamtype :: Ptr PGresult -> CInt -> IO Oid
-
-foreign import ccall        "stdio.h fdopen"
-    c_fdopen :: CInt -> CString -> IO (Ptr CFile)
-
-foreign import ccall        "libpq-fe.h PQprint"
-    c_PQprint :: Ptr CFile -> Ptr PGresult -> Ptr PrintOpt -> IO ()
 
 foreign import ccall unsafe "libpq-fe.h PQcmdStatus"
     c_PQcmdStatus :: Ptr PGresult -> IO CString
