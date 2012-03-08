@@ -203,6 +203,9 @@ import Prelude hiding ( print )
 import Foreign
 import Foreign.C.Types
 import Foreign.C.String
+#if __GLASGOW_HASKELL__ >= 702
+import qualified Foreign.ForeignPtr.Unsafe as Unsafe
+#endif
 import qualified Foreign.Concurrent as FC
 import System.Posix.Types ( Fd(..) )
 import Data.List ( foldl' )
@@ -290,7 +293,11 @@ newNullConnection = Conn `fmap` newForeignPtr_ nullPtr
 
 -- | Test if a connection is the Null Connection.
 isNullConnection :: Connection -> Bool
+#if __GLASGOW_HASKELL__ >= 702
+isNullConnection (Conn x) = Unsafe.unsafeForeignPtrToPtr x == nullPtr
+#else
 isNullConnection (Conn x) = unsafeForeignPtrToPtr x == nullPtr
+#endif
 {-# INLINE isNullConnection #-}
 
 -- | If 'connectStart' succeeds, the next stage is to poll libpq so
