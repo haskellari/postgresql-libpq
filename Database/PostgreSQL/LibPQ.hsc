@@ -585,8 +585,11 @@ serverVersion connection =
 -- same across operations on the 'Connection'.
 errorMessage :: Connection
              -> IO (Maybe B.ByteString)
-errorMessage = flip maybeBsFromConn c_PQerrorMessage
-
+errorMessage conn = withConn conn $ \cptr -> do
+        strptr <- c_PQerrorMessage cptr
+        if strptr == nullPtr
+          then return Nothing
+          else Just `fmap` B.packCString strptr
 
 -- | Obtains the file descriptor number of the connection socket to
 -- the server. (This will not change during normal operation, but
@@ -1951,18 +1954,6 @@ enumFromResult :: (Integral a, Enum b) => Result
                -> (Ptr PGresult -> IO a)
                -> IO b
 enumFromResult result f = fmap (toEnum . fromIntegral) $ withResult result f
-
-
--- | Returns a ByteString with a finalizer that touches the ForeignPtr
--- PGconn that \"owns\" the CString to keep it alive.
---
--- The CString must be a null terminated c string. nullPtrs are
--- treated as 'Nothing'.
-maybeBsFromConn :: Connection
-                -> (Ptr PGconn -> IO CString)
-                -> IO (Maybe B.ByteString)
-maybeBsFromConn connection f =
-    withConn' connection $ \fp -> maybeBsFromForeignPtr fp f
 
 
 -- | Returns a ByteString with a finalizer that touches the ForeignPtr
