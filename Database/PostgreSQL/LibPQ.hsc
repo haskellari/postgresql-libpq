@@ -1511,6 +1511,18 @@ unescapeBytea bs =
                     return $ Just $ B.fromForeignPtr tofp 0 $ fromIntegral l
 
 
+=======
+-- $copyfrom
+--
+-- This provides support for PostgreSQL's @COPY FROM@ facility.
+--
+-- For more information, see:
+--
+--  * <http://www.postgresql.org/docs/current/static/sql-copy.html>
+--
+--  * <http://www.postgresql.org/docs/current/static/libpq-copy.html>
+--
+
 data CopyResult = CopyOk            -- ^ The data was sent.
                 | CopyError         -- ^ An error occurred (use 'errorMessage'
                                     --   to retrieve details).
@@ -1529,6 +1541,7 @@ toCopyResult n | n < 0     = CopyError
                | otherwise = CopyOk
 
 
+-- | Send raw @COPY@ data to the server during the 'CopyIn' state.
 putCopyData :: Connection -> B.ByteString -> IO CopyResult
 putCopyData conn bs =
     B.unsafeUseAsCStringLen bs $ putCopyCString conn
@@ -1540,6 +1553,15 @@ putCopyCString conn (str, len) =
         withConn conn $ \ptr -> c_PQputCopyData ptr str (fromIntegral len)
 
 
+-- | Send end-of-data indication to the server during the 'CopyIn' state.
+--
+--  * @putCopyEnd conn Nothing@ ends the 'CopyIn' operation successfully.
+--
+--  * @putCopyEnd conn (Just errormsg)@ forces the @COPY@ to fail, with
+--    @errormsg@ used as the error message.
+--
+-- After 'putCopyEnd' returns 'CopyOk', call 'getResult' to obtain the final
+-- result status of the @COPY@ command.  Then return to normal operation.
 putCopyEnd :: Connection -> Maybe B.ByteString -> IO CopyResult
 putCopyEnd conn Nothing =
     fmap toCopyResult $
