@@ -143,6 +143,11 @@ module Database.PostgreSQL.LibPQ
     , escapeByteaConn
     , unescapeBytea
 
+    -- * Using COPY FROM
+    , CopyResult(..)
+    , putCopyData
+    , putCopyEnd
+
     -- * Asynchronous Command Processing
     -- $asynccommand
     , sendQuery
@@ -1506,6 +1511,45 @@ unescapeBytea bs =
                     return $ Just $ B.fromForeignPtr tofp 0 $ fromIntegral l
 
 
+data CopyResult = CopyOk            -- ^ The data was sent.
+                | CopyError         -- ^ An error occurred (use 'errorMessage'
+                                    --   to retrieve details).
+                | CopyWouldBlock    -- ^ The data was not sent because the
+                                    --   attempt would block (this case is only
+                                    --   possible if the connection is in
+                                    --   nonblocking mode)  Wait for
+                                    --   write-ready (e.g. by using
+                                    --   'Control.Concurrent.threadWaitWrite'
+                                    --   on the 'socket') and try again.
+
+
+toCopyResult :: CInt -> CopyResult
+toCopyResult n | n < 0     = CopyError
+               | n == 0    = CopyWouldBlock
+               | otherwise = CopyOk
+
+
+putCopyData :: Connection -> B.ByteString -> IO CopyResult
+putCopyData conn bs =
+    B.unsafeUseAsCStringLen bs $ putCopyCString conn
+
+
+putCopyCString :: Connection -> CStringLen -> IO CopyResult
+putCopyCString conn (str, len) =
+    fmap toCopyResult $
+        withConn conn $ \ptr -> c_PQputCopyData ptr str (fromIntegral len)
+
+
+putCopyEnd :: Connection -> Maybe B.ByteString -> IO CopyResult
+putCopyEnd conn Nothing =
+    fmap toCopyResult $
+        withConn conn $ \ptr -> c_PQputCopyEnd ptr nullPtr
+putCopyEnd conn (Just errormsg) =
+    fmap toCopyResult $
+        B.useAsCString errormsg $ \errormsg_cstr ->
+            withConn conn $ \ptr -> c_PQputCopyEnd ptr errormsg_cstr
+
+
 -- $asynccommand
 -- The 'exec' function is adequate for submitting commands in normal,
 -- synchronous applications. It has a couple of deficiencies, however,
@@ -2293,6 +2337,12 @@ foreign import ccall        "libpq-fe.h PQsetClientEncoding"
 type PGVerbosity = CInt
 foreign import ccall unsafe "libpq-fe.h PQsetErrorVerbosity"
     c_PQsetErrorVerbosity :: Ptr PGconn -> PGVerbosity -> IO PGVerbosity
+
+foreign import ccall        "libpq-fe.h PQputCopyData"
+    c_PQputCopyData :: Ptr PGconn -> Ptr CChar -> CInt -> IO CInt
+
+foreign import ccall        "libpq-fe.h PQputCopyEnd"
+    c_PQputCopyEnd :: Ptr PGconn -> CString -> IO CInt
 
 foreign import ccall        "libpq-fe.h PQsendQuery"
     c_PQsendQuery :: Ptr PGconn -> CString ->IO CInt
