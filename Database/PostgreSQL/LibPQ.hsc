@@ -1511,7 +1511,6 @@ unescapeBytea bs =
                     return $ Just $ B.fromForeignPtr tofp 0 $ fromIntegral l
 
 
-=======
 -- $copyfrom
 --
 -- This provides support for PostgreSQL's @COPY FROM@ facility.
