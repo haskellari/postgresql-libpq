@@ -143,10 +143,13 @@ module Database.PostgreSQL.LibPQ
     , escapeByteaConn
     , unescapeBytea
 
-    -- * Using COPY FROM
-    , CopyResult(..)
+    -- * Using COPY
+    -- $copy
+    , CopyInResult(..)
     , putCopyData
     , putCopyEnd
+    , CopyOutResult(..)
+    , getCopyData
 
     -- * Asynchronous Command Processing
     -- $asynccommand
@@ -1511,7 +1514,7 @@ unescapeBytea bs =
                     return $ Just $ B.fromForeignPtr tofp 0 $ fromIntegral l
 
 
--- $copyfrom
+-- $copy
 --
 -- This provides support for PostgreSQL's @COPY FROM@ facility.
 --
@@ -1522,33 +1525,34 @@ unescapeBytea bs =
 --  * <http://www.postgresql.org/docs/current/static/libpq-copy.html>
 --
 
-data CopyResult = CopyOk            -- ^ The data was sent.
-                | CopyError         -- ^ An error occurred (use 'errorMessage'
-                                    --   to retrieve details).
-                | CopyWouldBlock    -- ^ The data was not sent because the
-                                    --   attempt would block (this case is only
-                                    --   possible if the connection is in
-                                    --   nonblocking mode)  Wait for
-                                    --   write-ready (e.g. by using
-                                    --   'Control.Concurrent.threadWaitWrite'
-                                    --   on the 'socket') and try again.
+data CopyInResult
+   = CopyInOk          -- ^ The data was sent.
+   | CopyInError       -- ^ An error occurred (use 'errorMessage'
+                       --   to retrieve details).
+   | CopyInWouldBlock  -- ^ The data was not sent because the
+                       --   attempt would block (this case is only
+                       --   possible if the connection is in
+                       --   nonblocking mode)  Wait for
+                       --   write-ready (e.g. by using
+                       --   'Control.Concurrent.threadWaitWrite'
+                       --   on the 'socket') and try again.
 
 
-toCopyResult :: CInt -> CopyResult
-toCopyResult n | n < 0     = CopyError
-               | n == 0    = CopyWouldBlock
-               | otherwise = CopyOk
+toCopyInResult :: CInt -> CopyInResult
+toCopyInResult n | n < 0     = CopyInError
+                 | n == 0    = CopyInWouldBlock
+                 | otherwise = CopyInOk
 
 
 -- | Send raw @COPY@ data to the server during the 'CopyIn' state.
-putCopyData :: Connection -> B.ByteString -> IO CopyResult
+putCopyData :: Connection -> B.ByteString -> IO CopyInResult
 putCopyData conn bs =
     B.unsafeUseAsCStringLen bs $ putCopyCString conn
 
 
-putCopyCString :: Connection -> CStringLen -> IO CopyResult
+putCopyCString :: Connection -> CStringLen -> IO CopyInResult
 putCopyCString conn (str, len) =
-    fmap toCopyResult $
+    fmap toCopyInResult $
         withConn conn $ \ptr -> c_PQputCopyData ptr str (fromIntegral len)
 
 
@@ -1561,14 +1565,40 @@ putCopyCString conn (str, len) =
 --
 -- After 'putCopyEnd' returns 'CopyOk', call 'getResult' to obtain the final
 -- result status of the @COPY@ command.  Then return to normal operation.
-putCopyEnd :: Connection -> Maybe B.ByteString -> IO CopyResult
+putCopyEnd :: Connection -> Maybe B.ByteString -> IO CopyInResult
 putCopyEnd conn Nothing =
-    fmap toCopyResult $
+    fmap toCopyInResult $
         withConn conn $ \ptr -> c_PQputCopyEnd ptr nullPtr
 putCopyEnd conn (Just errormsg) =
-    fmap toCopyResult $
+    fmap toCopyInResult $
         B.useAsCString errormsg $ \errormsg_cstr ->
             withConn conn $ \ptr -> c_PQputCopyEnd ptr errormsg_cstr
+
+
+data CopyOutResult
+   = CopyOutRow !B.ByteString -- ^ Data representing a single row of the result
+   | CopyOutWouldBlock        -- ^ A complete row is not yet available.  This
+                              --   case is only possible when 'getCopyData' is
+                              --   has the async parameter set to 'True'.
+   | CopyOutDone              -- ^ No more rows are available
+   | CopyOutError             -- ^ An error occurred (e.g. the connection is
+                              --   not in the 'CopyOut' state).  Call
+                              --   'errorMessage' for more information.
+
+-- | Receive raw @COPY@ data from the server during the 'CopyOut' state.
+--   The boolean parameter determines whether or not the call will block
+--   while waiting for data.
+getCopyData :: Connection -> Bool -> IO CopyOutResult
+getCopyData conn async = alloca $ \strp -> withConn conn $ \c -> do
+    len <- c_PQgetCopyData c strp (if async then 1 else 0)
+    if len <= 0
+      then return $ case compare len (-1) of
+                      LT -> CopyOutError
+                      EQ -> CopyOutDone
+                      GT -> CopyOutWouldBlock
+      else do
+        fp <- newForeignPtr p_PQfreemem =<< peek strp
+        return (CopyOutRow (B.fromForeignPtr fp 0 (fromIntegral len)))
 
 
 -- $asynccommand
@@ -2364,6 +2394,9 @@ foreign import ccall        "libpq-fe.h PQputCopyData"
 
 foreign import ccall        "libpq-fe.h PQputCopyEnd"
     c_PQputCopyEnd :: Ptr PGconn -> CString -> IO CInt
+
+foreign import ccall        "libpq-fe.h PQgetCopyData"
+    c_PQgetCopyData :: Ptr PGconn -> Ptr (Ptr Word8) -> CInt -> IO CInt
 
 foreign import ccall        "libpq-fe.h PQsendQuery"
     c_PQsendQuery :: Ptr PGconn -> CString ->IO CInt
