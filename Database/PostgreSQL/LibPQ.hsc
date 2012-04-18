@@ -522,6 +522,7 @@ data TransactionStatus = TransIdle    -- ^ currently idle
                        | TransInTrans -- ^ idle, in a valid transaction block
                        | TransInError -- ^ idle, in a failed transaction block
                        | TransUnknown -- ^ the connection is bad
+                         deriving (Eq, Show)
 
 -- | Returns the current in-transaction status of the server.
 --
@@ -1055,6 +1056,8 @@ data FieldCode = DiagSeverity
                -- ^ The name of the source-code function reporting the
                -- error.
 
+                 deriving (Eq, Show)
+
 
 instance Enum FieldCode where
     toEnum (#const PG_DIAG_SEVERITY)           = DiagSeverity
@@ -1346,7 +1349,7 @@ data PrintOpt = PrintOpt {
     , poTableOpt   :: B.ByteString   -- ^ attributes for HTML table element
     , poCaption    :: B.ByteString   -- ^ HTML table caption
     , poFieldName  :: [B.ByteString] -- ^ list of replacement field names
-    }
+    } deriving Show
 
 
 defaultPrintOpt :: PrintOpt
@@ -1536,6 +1539,7 @@ data CopyInResult
                        --   write-ready (e.g. by using
                        --   'Control.Concurrent.threadWaitWrite'
                        --   on the 'socket') and try again.
+     deriving (Eq, Show)
 
 
 toCopyInResult :: CInt -> CopyInResult
@@ -1584,6 +1588,7 @@ data CopyOutResult
    | CopyOutError             -- ^ An error occurred (e.g. the connection is
                               --   not in the 'CopyOut' state).  Call
                               --   'errorMessage' for more information.
+     deriving Show
 
 -- | Receive raw @COPY@ data from the server during the 'CopyOut' state.
 --   The boolean parameter determines whether or not the call will block
@@ -1817,6 +1822,7 @@ isnonblocking connection = enumFromConn connection c_PQisnonblocking
 data FlushStatus = FlushOk
                  | FlushFailed
                  | FlushWriting
+                   deriving (Eq, Show)
 
 -- | Attempts to flush any queued output data to the server. Returns
 -- 'FlushOk' if successful (or if the send queue is empty),
@@ -1910,7 +1916,7 @@ data Notify = Notify {
       notifyRelname :: B.ByteString -- ^ notification channel name
     , notifyBePid   :: CPid         -- ^ process ID of notifying server process
     , notifyExtra   :: B.ByteString -- ^ notification payload string
-    }
+    } deriving Show
 
 instance Storable Notify where
   sizeOf _ = #{size PGnotify}
