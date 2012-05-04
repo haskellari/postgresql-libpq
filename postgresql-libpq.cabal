@@ -12,7 +12,7 @@ Description:         This is a binding to libpq: the C application
 Homepage:            http://github.com/lpsmith/postgresql-libpq
 License:             BSD3
 License-file:        LICENSE
-Author:              Grant Monroe, Leon P Smith
+Author:              Grant Monroe, Leon P Smith, Joey Adams
 Maintainer:          Leon P Smith <leon@melding-monads.com>
 Copyright:           (c) 2010 Grant Monroe
                      (c) 2011 Leon P Smith
