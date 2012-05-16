@@ -2438,11 +2438,11 @@ foreign import ccall        "libpq-fe.h &PQfreeCancel"
 foreign import ccall        "libpq-fe.h PQcancel"
     c_PQcancel :: Ptr PGcancel -> CString -> CInt -> IO CInt
 
-foreign import ccall        "libpq-fe.h PQnotifies"
+foreign import ccall unsafe "libpq-fe.h PQnotifies"
     c_PQnotifies :: Ptr PGconn -> IO (Ptr Notify)
 
-foreign import ccall        "libpq-fe.h PQconsumeInput"
-    c_PQconsumeInput :: Ptr PGconn ->IO CInt
+foreign import ccall unsafe "libpq-fe.h PQconsumeInput"
+    c_PQconsumeInput :: Ptr PGconn -> IO CInt
 
 foreign import ccall        "libpq-fe.h PQisBusy"
     c_PQisBusy :: Ptr PGconn -> IO CInt
@@ -2502,7 +2502,7 @@ foreign import ccall unsafe "libpq-fe.h PQnfields"
 foreign import ccall unsafe "libpq-fe.h PQfname"
     c_PQfname :: Ptr PGresult -> CInt -> IO CString
 
-foreign import ccall        "libpq-fe.h PQfnumber"
+foreign import ccall unsafe "libpq-fe.h PQfnumber"
     c_PQfnumber :: Ptr PGresult -> CString -> IO CInt
 
 foreign import ccall unsafe "libpq-fe.h PQftable"
