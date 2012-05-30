@@ -127,8 +127,6 @@ module Database.PostgreSQL.LibPQ
     , getlength
     , nparams
     , paramtype
-    , PrintOpt(..)
-    , defaultPrintOpt
 
     -- Retrieving Result Information for Other Commands
     -- $othercommands
@@ -1338,72 +1336,6 @@ paramtype result param_number =
     withResult result $ \p -> c_PQparamtype p $ fromIntegral param_number
 
 
-data PrintOpt = PrintOpt {
-      poHeader     :: Bool -- ^ print output field headings and row count
-    , poAlign      :: Bool -- ^ fill align the fields
-    , poStandard   :: Bool -- ^ old brain dead format
-    , poHtml3      :: Bool -- ^ output HTML tables
-    , poExpanded   :: Bool -- ^ expand tables
-    , poPager      :: Bool -- ^ use pager for output if needed
-    , poFieldSep   :: B.ByteString   -- ^ field separator
-    , poTableOpt   :: B.ByteString   -- ^ attributes for HTML table element
-    , poCaption    :: B.ByteString   -- ^ HTML table caption
-    , poFieldName  :: [B.ByteString] -- ^ list of replacement field names
-    } deriving Show
-
-
-defaultPrintOpt :: PrintOpt
-defaultPrintOpt = PrintOpt True True False False False False "|" "" "" []
-
-
-#let alignment t = "%lu", (unsigned long)offsetof(struct {char x__; t (y__); }, y__)
-instance Storable PrintOpt where
-  sizeOf _ = #{size PQprintOpt}
-
-  alignment _ = #{alignment PQprintOpt}
-
-  peek ptr = do
-      a <- fmap pqbool $ #{peek PQprintOpt, header  } ptr
-      b <- fmap pqbool $ #{peek PQprintOpt, align   } ptr
-      c <- fmap pqbool $ #{peek PQprintOpt, standard} ptr
-      d <- fmap pqbool $ #{peek PQprintOpt, html3   } ptr
-      e <- fmap pqbool $ #{peek PQprintOpt, expanded} ptr
-      f <- fmap pqbool $ #{peek PQprintOpt, pager   } ptr
-      g <- B.packCString =<< #{peek PQprintOpt, fieldSep} ptr
-      h <- B.packCString =<< #{peek PQprintOpt, tableOpt} ptr
-      i <- B.packCString =<< #{peek PQprintOpt, caption} ptr
-      j <- #{peek PQprintOpt, fieldName} ptr
-      j' <- peekArray0 nullPtr j
-      j'' <- mapM B.packCString j'
-      return $ PrintOpt a b c d e f g h i j''
-      where
-        pqbool :: CChar -> Bool
-        pqbool = toEnum . fromIntegral
-
-  poke ptr (PrintOpt a b c d e f g h i j) =
-      B.useAsCString g $ \g' -> do
-        B.useAsCString h $ \h' -> do
-          B.useAsCString i $ \i' -> do
-            withMany B.useAsCString j $ \j' ->
-              withArray0 nullPtr j' $ \j'' -> do
-                let a' = (fromIntegral $ fromEnum a)::CChar
-                    b' = (fromIntegral $ fromEnum b)::CChar
-                    c' = (fromIntegral $ fromEnum c)::CChar
-                    d' = (fromIntegral $ fromEnum d)::CChar
-                    e' = (fromIntegral $ fromEnum e)::CChar
-                    f' = (fromIntegral $ fromEnum f)::CChar
-                #{poke PQprintOpt, header}    ptr a'
-                #{poke PQprintOpt, align}     ptr b'
-                #{poke PQprintOpt, standard}  ptr c'
-                #{poke PQprintOpt, html3}     ptr d'
-                #{poke PQprintOpt, expanded}  ptr e'
-                #{poke PQprintOpt, pager}     ptr f'
-                #{poke PQprintOpt, fieldSep}  ptr g'
-                #{poke PQprintOpt, tableOpt}  ptr h'
-                #{poke PQprintOpt, caption}   ptr i'
-                #{poke PQprintOpt, fieldName} ptr j''
-
-
 -- $othercommands
 -- These functions are used to extract other information from PGresult
 -- objects.
@@ -1918,6 +1850,7 @@ data Notify = Notify {
     , notifyExtra   :: B.ByteString -- ^ notification payload string
     } deriving Show
 
+#let alignment t = "%lu", (unsigned long)offsetof(struct {char x__; t (y__); }, y__)
 instance Storable Notify where
   sizeOf _ = #{size PGnotify}
 
