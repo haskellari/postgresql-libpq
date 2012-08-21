@@ -229,6 +229,10 @@ import qualified Data.ByteString.Internal as B ( fromForeignPtr
                                                )
 import qualified Data.ByteString as B
 
+#if __GLASGOW_HASKELL__ >= 700
+import Control.Concurrent (newMVar, tryTakeMVar)
+#endif
+
 -- $dbconn
 -- The following functions deal with making a connection to a
 -- PostgreSQL backend server. An application program can have several
@@ -263,7 +267,7 @@ connectdb conninfo =
        if connPtr == nullPtr
            then fail "libpq failed to allocate a PGconn structure"
 #if __GLASGOW_HASKELL__ >= 700
-           else Conn `fmap` FC.newForeignPtr connPtr (pqfinish connPtr)
+           else Conn `fmap` newForeignPtrOnce connPtr (pqfinish connPtr)
 #else
            else Conn `fmap` newForeignPtr p_PQfinish connPtr
 #endif
@@ -276,7 +280,7 @@ connectStart connStr =
        if connPtr == nullPtr
            then fail "libpq failed to allocate a PGconn structure"
 #if __GLASGOW_HASKELL__ >= 700
-           else Conn `fmap` FC.newForeignPtr connPtr (pqfinish connPtr)
+           else Conn `fmap` newForeignPtrOnce connPtr (pqfinish connPtr)
 #else
            else Conn `fmap` newForeignPtr p_PQfinish connPtr
 #endif
@@ -290,6 +294,16 @@ pqfinish conn = do
            -- This case may be worth investigating further
            c_PQfinish conn
      fd -> closeFdWith (\_ -> c_PQfinish conn) (Fd fd)
+
+-- | Workaround for bug in 'FC.newForeignPtr' before base 4.6.  Ensure the
+-- finalizer is only run once, to prevent a segfault.  See GHC ticket #7170
+--
+-- Note that 'getvalue' and 'maybeBsFromForeignPtr' do not need this
+-- workaround, since their finalizers are just 'touchForeignPtr' calls.
+newForeignPtrOnce :: Ptr a -> IO () -> IO (ForeignPtr a)
+newForeignPtrOnce ptr fin = do
+    mv <- newMVar fin
+    FC.newForeignPtr ptr $ tryTakeMVar mv >>= maybe (return ()) id
 #endif
 
 -- | Allocate a Null Connection,  which all libpq functions
