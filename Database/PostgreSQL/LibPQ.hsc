@@ -229,7 +229,7 @@ import qualified Data.ByteString.Internal as B ( fromForeignPtr
                                                )
 import qualified Data.ByteString as B
 
-#if __GLASGOW_HASKELL__ >= 700
+#if __GLASGOW_HASKELL__ >= 700 && __GLASGOW_HASKELL__ < 706
 import Control.Concurrent (newMVar, tryTakeMVar)
 #endif
 
@@ -266,7 +266,9 @@ connectdb conninfo =
     do connPtr <- B.useAsCString conninfo c_PQconnectdb
        if connPtr == nullPtr
            then fail "libpq failed to allocate a PGconn structure"
-#if __GLASGOW_HASKELL__ >= 700
+#if __GLASGOW_HASKELL__ >= 706
+           else Conn `fmap` FC.newForeignPtr connPtr (pqfinish connPtr)
+#elif __GLASGOW_HASKELL__ >= 700
            else Conn `fmap` newForeignPtrOnce connPtr (pqfinish connPtr)
 #else
            else Conn `fmap` newForeignPtr p_PQfinish connPtr
@@ -279,13 +281,21 @@ connectStart connStr =
     do connPtr <- B.useAsCString connStr c_PQconnectStart
        if connPtr == nullPtr
            then fail "libpq failed to allocate a PGconn structure"
-#if __GLASGOW_HASKELL__ >= 700
+#if __GLASGOW_HASKELL__ >= 706
+           else Conn `fmap` FC.newForeignPtr connPtr (pqfinish connPtr)
+#elif __GLASGOW_HASKELL__ >= 700
            else Conn `fmap` newForeignPtrOnce connPtr (pqfinish connPtr)
 #else
            else Conn `fmap` newForeignPtr p_PQfinish connPtr
 #endif
 
 #if __GLASGOW_HASKELL__ >= 700
+-- | This covers the case when a connection is closed while other Haskell
+--   threads are using GHC's IO manager to wait on the descriptor.  This is
+--   commonly the case with asynchronous notifications, for example.  Since
+--   libpq is responsible for opening and closing the file descriptor, GHC's
+--   IO manager needs to be informed that the file descriptor has been
+--   closed.  The IO manager will then raise an exception in those threads.
 pqfinish :: Ptr PGconn -> IO ()
 pqfinish conn = do
    mfd <- c_PQsocket conn
@@ -294,7 +304,9 @@ pqfinish conn = do
            -- This case may be worth investigating further
            c_PQfinish conn
      fd -> closeFdWith (\_ -> c_PQfinish conn) (Fd fd)
+#endif
 
+#if __GLASGOW_HASKELL__ >= 700 && __GLASGOW_HASKELL__ < 706
 -- | Workaround for bug in 'FC.newForeignPtr' before base 4.6.  Ensure the
 -- finalizer is only run once, to prevent a segfault.  See GHC ticket #7170
 --
