@@ -1192,9 +1192,9 @@ fnumber (Result res) columnName =
     do num <- withForeignPtr res $ \resPtr ->
               B.useAsCString columnName $ \columnNamePtr ->
                   c_PQfnumber resPtr columnNamePtr
-       return $ if num == -1
-                  then Nothing
-                  else Just $ toColumn num
+       return $! if num == -1
+                   then Nothing
+                   else Just $ toColumn num
 
 
 -- | Returns the OID of the table from which the given column was
@@ -1514,7 +1514,7 @@ putCopyData conn bs =
 
 putCopyCString :: Connection -> CStringLen -> IO CopyInResult
 putCopyCString conn (str, len) =
-    fmap toCopyInResult $
+    toCopyInResult <$!>
         withConn conn $ \ptr -> c_PQputCopyData ptr str (fromIntegral len)
 
 
@@ -1529,10 +1529,10 @@ putCopyCString conn (str, len) =
 -- result status of the @COPY@ command.  Then return to normal operation.
 putCopyEnd :: Connection -> Maybe B.ByteString -> IO CopyInResult
 putCopyEnd conn Nothing =
-    fmap toCopyInResult $
+    toCopyInResult <$!>
         withConn conn $ \ptr -> c_PQputCopyEnd ptr nullPtr
 putCopyEnd conn (Just errormsg) =
-    fmap toCopyInResult $
+    toCopyInResult <$!>
         B.useAsCString errormsg $ \errormsg_cstr ->
             withConn conn $ \ptr -> c_PQputCopyEnd ptr errormsg_cstr
 
@@ -1555,13 +1555,13 @@ getCopyData :: Connection -> Bool -> IO CopyOutResult
 getCopyData conn async = alloca $ \strp -> withConn conn $ \c -> do
     len <- c_PQgetCopyData c strp (if async then 1 else 0)
     if len <= 0
-      then return $ case compare len (-1) of
-                      LT -> CopyOutError
-                      EQ -> CopyOutDone
-                      GT -> CopyOutWouldBlock
+      then return $! case compare len (-1) of
+                       LT -> CopyOutError
+                       EQ -> CopyOutDone
+                       GT -> CopyOutWouldBlock
       else do
         fp <- newForeignPtr p_PQfreemem =<< peek strp
-        return (CopyOutRow (B.fromForeignPtr fp 0 (fromIntegral len)))
+        return $! CopyOutRow (B.fromForeignPtr fp 0 (fromIntegral len))
 
 
 -- $asynccommand
@@ -1768,7 +1768,7 @@ setnonblocking :: Connection
 setnonblocking connection blocking =
     do let arg = fromIntegral $ fromEnum blocking
        stat <- withConn connection $ \ptr -> c_PQsetnonblocking ptr arg
-       return $ stat == 0
+       return $! stat == 0
 
 
 -- | Returns the blocking status of the database connection.
@@ -1939,7 +1939,7 @@ setClientEncoding connection enc =
                B.useAsCString enc $ \s ->
                    c_PQsetClientEncoding c s
 
-       return $ stat == 0
+       return $! stat == 0
 
 
 data Verbosity = ErrorsTerse
@@ -1979,14 +1979,7 @@ setErrorVerbosity connection verbosity =
 withConn :: Connection
          -> (Ptr PGconn -> IO b)
          -> IO b
-withConn connection f =
-    withConn' connection $ flip withForeignPtr f
-
-
-withConn' :: Connection
-          -> (ForeignPtr PGconn -> IO b)
-          -> IO b
-withConn' (Conn fp) f = f fp
+withConn (Conn fp) f = withForeignPtr fp f
 
 
 enumFromConn :: (Integral a, Enum b) => Connection
@@ -2081,6 +2074,11 @@ loMode mode = case mode of
                 ReadWriteMode -> (#const INV_READ) .|. (#const INV_WRITE)
                 AppendMode    -> (#const INV_WRITE)
 
+(<$!>) :: (a -> b) -> IO a -> IO b
+f <$!> ma = ma >>= \a -> return $! f a
+infixr 0 <$!>
+{-# INLINE (<$!>) #-}
+
 toMaybeOid :: Oid -> Maybe Oid
 toMaybeOid oid | oid == invalidOid = Nothing
                | otherwise         = Just oid
@@ -2100,7 +2098,7 @@ negError x = if x < 0 then Nothing else Just ()
 loCreat :: Connection -> IO (Maybe Oid)
 loCreat connection
     = withConn connection $ \c -> do
-        toMaybeOid `fmap` c_lo_creat c (loMode ReadMode)
+        toMaybeOid <$!> c_lo_creat c (loMode ReadMode)
 
 -- | Creates a new large object with a particular Object ID.  Returns
 -- 'Nothing' if the requested Object ID is already in use by some other
@@ -2110,7 +2108,7 @@ loCreat connection
 loCreate :: Connection -> Oid -> IO (Maybe Oid)
 loCreate connection oid
     = withConn connection $ \c -> do
-        toMaybeOid `fmap` c_lo_create c oid
+        toMaybeOid <$!> c_lo_create c oid
 
 -- | Imports an operating system file as a large object.  Note that the
 -- file is read by the client interface library, not by the server; so it
@@ -2121,7 +2119,7 @@ loImport :: Connection -> FilePath -> IO (Maybe Oid)
 loImport connection filepath
     = withConn connection $ \c -> do
         withCString filepath $ \f -> do
-          toMaybeOid `fmap` c_lo_import c f
+          toMaybeOid <$!> c_lo_import c f
 
 -- | Imports an operating system file as a large object with the given
 -- Object ID.  Combines the behavior of 'loImport' and 'loCreate'
@@ -2130,7 +2128,7 @@ loImportWithOid :: Connection -> FilePath -> Oid -> IO (Maybe Oid)
 loImportWithOid connection filepath oid
     = withConn connection $ \c -> do
         withCString filepath $ \f -> do
-          toMaybeOid `fmap` c_lo_import_with_oid c f oid
+          toMaybeOid <$!> c_lo_import_with_oid c f oid
 
 -- | Exports a large object into a operating system file.  Note that
 -- the file is written by the client interface library, not the server.
@@ -2140,7 +2138,7 @@ loExport :: Connection -> Oid -> FilePath -> IO (Maybe ())
 loExport connection oid filepath
     = withConn connection $ \c -> do
         withCString filepath $ \f -> do
-          negError `fmap` c_lo_export c oid f
+          negError <$!> c_lo_export c oid f
 
 -- | Opens an existing large object for reading or writing.  The Oid specifies
 -- the large object to open.  A large object cannot be opened before it is
@@ -2197,7 +2195,7 @@ loWrite :: Connection -> LoFd -> B.ByteString -> IO (Maybe Int)
 loWrite connection (LoFd fd) bytes
     = withConn connection $ \c -> do
         B.unsafeUseAsCStringLen bytes $ \(byteptr,len) -> do
-          nonnegInt `fmap` c_lo_write c fd byteptr (fromIntegral len)
+          nonnegInt <$!> c_lo_write c fd byteptr (fromIntegral len)
 
 -- | @loRead conn fd len@ reads up to @len@ bytes from the large object
 -- descriptor @fd@.  In the event of an error,  'Nothing' is returned.
@@ -2236,7 +2234,7 @@ loSeek connection (LoFd fd) seekmode delta
 loTell :: Connection -> LoFd -> IO (Maybe Int)
 loTell connection (LoFd fd)
     = withConn connection $ \c -> do
-        nonnegInt `fmap` c_lo_tell c fd
+        nonnegInt <$!> c_lo_tell c fd
 
 -- | Truncates a large object to a given length.  If the length is greater
 -- than the current large object,  then the large object is extended with
@@ -2250,7 +2248,7 @@ loTell connection (LoFd fd)
 loTruncate :: Connection -> LoFd -> Int -> IO (Maybe ())
 loTruncate connection (LoFd fd) size
     = withConn connection $ \c -> do
-        negError `fmap` c_lo_truncate c fd (fromIntegral size)
+        negError <$!> c_lo_truncate c fd (fromIntegral size)
 
 -- | Closes a large object descriptor.  Any large object descriptors that
 -- remain open at the end of a transaction will be closed automatically.
@@ -2258,14 +2256,14 @@ loTruncate connection (LoFd fd) size
 loClose :: Connection -> LoFd -> IO (Maybe ())
 loClose connection (LoFd fd)
     = withConn connection $ \c -> do
-        negError `fmap` c_lo_close c fd
+        negError <$!> c_lo_close c fd
 
 -- | Removes a large object from the database.
 
 loUnlink :: Connection -> Oid -> IO (Maybe ())
 loUnlink connection oid
     = withConn connection $ \c -> do
-        negError `fmap` c_lo_unlink c oid
+        negError <$!> c_lo_unlink c oid
 
 foreign import ccall        "libpq-fe.h PQconnectdb"
     c_PQconnectdb :: CString ->IO (Ptr PGconn)
