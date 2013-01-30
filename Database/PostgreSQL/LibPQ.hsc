@@ -429,7 +429,7 @@ pollHelper poller connection =
          (#const PGRES_POLLING_OK)      -> return PollingOk
          (#const PGRES_POLLING_WRITING) -> return PollingWriting
          (#const PGRES_POLLING_FAILED)  -> return PollingFailed
-         _ -> error $ "unexpected polling status " ++ show code
+         _ -> fail $ "unexpected polling status " ++ show code
 
 
 -- | Closes the connection to the server.
@@ -528,17 +528,17 @@ status :: Connection
        -> IO ConnStatus
 status connection = do
   stat <- withConn connection c_PQstatus
-  return $ case stat of
-             (#const CONNECTION_OK)               -> ConnectionOk
-             (#const CONNECTION_BAD)              -> ConnectionBad
-             (#const CONNECTION_STARTED)          -> ConnectionStarted
-             (#const CONNECTION_MADE)             -> ConnectionMade
-             (#const CONNECTION_AWAITING_RESPONSE)-> ConnectionAwaitingResponse
-             (#const CONNECTION_AUTH_OK)          -> ConnectionAuthOk
-             (#const CONNECTION_SETENV)           -> ConnectionSetEnv
-             (#const CONNECTION_SSL_STARTUP)      -> ConnectionSSLStartup
-             --(#const CONNECTION_NEEDED)           -> ConnectionNeeded
-             c -> error $ "Unknown connection status " ++ show c
+  case stat of
+    (#const CONNECTION_OK)               -> return ConnectionOk
+    (#const CONNECTION_BAD)              -> return ConnectionBad
+    (#const CONNECTION_STARTED)          -> return ConnectionStarted
+    (#const CONNECTION_MADE)             -> return ConnectionMade
+    (#const CONNECTION_AWAITING_RESPONSE)-> return ConnectionAwaitingResponse
+    (#const CONNECTION_AUTH_OK)          -> return ConnectionAuthOk
+    (#const CONNECTION_SETENV)           -> return ConnectionSetEnv
+    (#const CONNECTION_SSL_STARTUP)      -> return ConnectionSSLStartup
+    --(#const CONNECTION_NEEDED)           -> ConnectionNeeded
+    c -> fail $ "Unknown connection status " ++ show c
 
 
 data TransactionStatus = TransIdle    -- ^ currently idle
@@ -556,13 +556,13 @@ transactionStatus :: Connection
                   -> IO TransactionStatus
 transactionStatus connection = do
     stat <- withConn connection c_PQtransactionStatus
-    return $ case stat of
-               (#const PQTRANS_IDLE)    -> TransIdle
-               (#const PQTRANS_ACTIVE)  -> TransActive
-               (#const PQTRANS_INTRANS) -> TransInTrans
-               (#const PQTRANS_INERROR) -> TransInError
-               (#const PQTRANS_UNKNOWN) -> TransUnknown
-               c -> error $ "Unknown transaction status " ++ show c
+    case stat of
+      (#const PQTRANS_IDLE)    -> return TransIdle
+      (#const PQTRANS_ACTIVE)  -> return TransActive
+      (#const PQTRANS_INTRANS) -> return TransInTrans
+      (#const PQTRANS_INERROR) -> return TransInError
+      (#const PQTRANS_UNKNOWN) -> return TransUnknown
+      c -> fail $ "Unknown transaction status " ++ show c
 
 
 -- | Looks up a current parameter setting of the server.
