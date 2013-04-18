@@ -1553,7 +1553,7 @@ data CopyOutResult
 --   while waiting for data.
 getCopyData :: Connection -> Bool -> IO CopyOutResult
 getCopyData conn async = alloca $ \strp -> withConn conn $ \c -> do
-    len <- c_PQgetCopyData c strp (if async then 1 else 0)
+    len <- c_PQgetCopyData c strp $! (fromIntegral (fromEnum async))
     if len <= 0
       then return $! case compare len (-1) of
                        LT -> CopyOutError
