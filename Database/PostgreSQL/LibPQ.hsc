@@ -226,6 +226,7 @@ import Data.ByteString.Char8 ()
 import qualified Data.ByteString.Unsafe as B
 import qualified Data.ByteString.Internal as B ( fromForeignPtr
                                                , c_strlen
+                                               , createAndTrim
                                                )
 import qualified Data.ByteString as B
 
@@ -1413,19 +1414,16 @@ escapeStringConn :: Connection
                  -> B.ByteString
                  -> IO (Maybe B.ByteString)
 escapeStringConn connection bs =
-    withConn connection $ \conn ->
-        B.unsafeUseAsCStringLen bs $ \(from, bslen) ->
-            alloca $ \err -> do
-              to <- mallocBytes (bslen*2+1)
-              num <- c_PQescapeStringConn conn to from (fromIntegral bslen) err
-              stat <- peek err
-              case stat of
-                0 -> do let i = fromIntegral num
-                        tore <- reallocBytes to i
-                        tofp <- newForeignPtr finalizerFree tore
-                        return $ Just $ B.fromForeignPtr tofp 0 i
-                _ -> do free to
-                        return Nothing
+  withConn connection $ \conn ->
+    B.unsafeUseAsCStringLen bs $ \(from, bslen) ->
+      alloca $ \err -> do
+        xs <- B.createAndTrim (bslen*2+1) $ \to ->
+                 fromIntegral `fmap`
+                   c_PQescapeStringConn conn to from (fromIntegral bslen) err
+        stat <- peek err
+        case stat of
+          0 -> return $ Just xs
+          _ -> return Nothing
 
 
 -- | Escapes binary data for use within an SQL command with the type
@@ -1444,7 +1442,6 @@ escapeByteaConn connection bs =
                 else do tofp <- newForeignPtr p_PQfreemem to
                         l <- peek to_length
                         return $ Just $ B.fromForeignPtr tofp 0 ((fromIntegral l) - 1)
-
 
 
 -- | Converts a 'ByteString' representation of binary data into binary
