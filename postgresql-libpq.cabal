@@ -21,6 +21,7 @@ Build-type:          Custom
 -- Extra-source-files:
 Cabal-version:       >=1.8
 Library
+  hs-source-dirs:      src
   Exposed-modules:     Database.PostgreSQL.LibPQ
 
   Build-depends:       base >= 4 && < 5
