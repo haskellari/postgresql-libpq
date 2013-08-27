@@ -11,11 +11,7 @@ import Distribution.Verbosity
 import Data.Char (isSpace)
 import Data.List (dropWhile,reverse)
 
-import Control.Monad
-
 main = defaultMainWithHooks simpleUserHooks {
-  hookedPrograms = [pgconfigProgram],
-
   confHook = \pkg flags -> do
     lbi <- confHook simpleUserHooks pkg flags
     bi <- psqlBuildInfo lbi
@@ -26,17 +22,10 @@ main = defaultMainWithHooks simpleUserHooks {
     }
 }
 
-pgconfigProgram = (simpleProgram "pgconfig") {
-    programFindLocation = \verbosity -> do
-      pgconfig  <- findProgramLocation verbosity "pgconfig"
-      pg_config <- findProgramLocation verbosity "pg_config"
-      return (pgconfig `mplus` pg_config)
-  }
-
 psqlBuildInfo :: LocalBuildInfo -> IO BuildInfo
 psqlBuildInfo lbi = do
   (pgconfigProg, _) <- requireProgram verbosity
-                         pgconfigProgram (withPrograms lbi)
+                         (simpleProgram "pg_config") (withPrograms lbi)
   let pgconfig = rawSystemProgramStdout verbosity pgconfigProg
 
   incDir <- pgconfig ["--includedir"]
