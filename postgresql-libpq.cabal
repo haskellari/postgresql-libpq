@@ -28,7 +28,7 @@ Library
                      , bytestring
 
   GHC-Options:       -Wall
-  Extra-Libraries:   pq
+  Extra-Libraries:   pq crypto ssl com_err asn1 krb5 wind roken heimbase
   -- Other-modules:
   Build-tools:       hsc2hs
 
