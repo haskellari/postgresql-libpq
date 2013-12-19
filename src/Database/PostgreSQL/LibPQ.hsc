@@ -1288,7 +1288,7 @@ getvalue (Result fp) (Row rowNum) (Col colNum) =
         else do cstr <- c_PQgetvalue ptr rowNum colNum
                 l <- c_PQgetlength ptr rowNum colNum
                 fp' <- FC.newForeignPtr (castPtr cstr) finalizer
-                return $ Just $ B.fromForeignPtr fp' 0 $ fromIntegral l
+                return $! Just $! B.fromForeignPtr fp' 0 $ fromIntegral l
 
     where
       finalizer = touchForeignPtr fp
