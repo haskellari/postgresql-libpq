@@ -1441,7 +1441,7 @@ escapeByteaConn connection bs =
                 then return Nothing
                 else do tofp <- newForeignPtr p_PQfreemem to
                         l <- peek to_length
-                        return $ Just $ B.fromForeignPtr tofp 0 ((fromIntegral l) - 1)
+                        return $! Just $! B.fromForeignPtr tofp 0 ((fromIntegral l) - 1)
 
 
 -- | Converts a 'ByteString' representation of binary data into binary
@@ -1469,7 +1469,7 @@ unescapeBytea bs =
             then return Nothing
             else do tofp <- newForeignPtr p_PQfreemem to
                     l <- peek to_length
-                    return $ Just $ B.fromForeignPtr tofp 0 $ fromIntegral l
+                    return $! Just $! B.fromForeignPtr tofp 0 $ fromIntegral l
 
 
 -- $copy
@@ -1847,7 +1847,7 @@ cancel (Cancel fp) =
 
              _ -> do l <- fromIntegral `fmap` B.c_strlen errbuf
                      fp' <- newForeignPtr finalizerFree $ castPtr errbuf
-                     return $ Left $ B.fromForeignPtr fp' 0 l
+                     return $! Left $! B.fromForeignPtr fp' 0 l
 
     where
       errbufsize = 256
@@ -2038,7 +2038,7 @@ maybeBsFromForeignPtr fp f =
              then return Nothing
              else do l <- fromIntegral `fmap` B.c_strlen cstr
                      fp' <- FC.newForeignPtr (castPtr cstr) finalizer
-                     return $ Just $ B.fromForeignPtr fp' 0 l
+                     return $! Just $! B.fromForeignPtr fp' 0 l
     where
       finalizer = touchForeignPtr fp
 
@@ -2210,7 +2210,7 @@ loRead connection (LoFd !fd) !maxlen
           else do
                   bufre <- reallocBytes buf len
                   buffp <- newForeignPtr finalizerFree bufre
-                  return (Just (B.fromForeignPtr buffp 0 len))
+                  return $! Just $! B.fromForeignPtr buffp 0 len
 
 -- | Changes the current read or write location associated with
 -- a large object descriptor.    The return value is the new location
@@ -2224,7 +2224,7 @@ loSeek connection (LoFd fd) seekmode delta
                                      AbsoluteSeek -> #const SEEK_SET
                                      RelativeSeek -> #const SEEK_CUR
                                      SeekFromEnd  -> #const SEEK_END
-        return (nonnegInt pos)
+        return $! nonnegInt pos
 
 -- | Obtains the current read or write location of a large object descriptor.
 
