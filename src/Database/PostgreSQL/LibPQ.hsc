@@ -1838,17 +1838,12 @@ getCancel connection =
 cancel :: Cancel
        -> IO (Either B.ByteString ())
 cancel (Cancel fp) =
-    withForeignPtr fp $ \ptr ->
-        do errbuf <- mallocBytes errbufsize
-           res <- c_PQcancel ptr errbuf $ fromIntegral errbufsize
-           case res of
-             1 -> do free errbuf
-                     return $ Right ()
-
-             _ -> do l <- fromIntegral `fmap` B.c_strlen errbuf
-                     fp' <- newForeignPtr finalizerFree $ castPtr errbuf
-                     return $! Left $! B.fromForeignPtr fp' 0 l
-
+    withForeignPtr fp $ \ptr -> do
+        allocaBytes errbufsize $ \errbuf -> do
+            res <- c_PQcancel ptr errbuf $ fromIntegral errbufsize
+            case res of
+              1 -> return $ Right ()
+              _ -> Left `fmap` B.packCString errbuf
     where
       errbufsize = 256
 
