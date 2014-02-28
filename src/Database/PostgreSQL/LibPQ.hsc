@@ -626,11 +626,7 @@ serverVersion connection =
 -- same across operations on the 'Connection'.
 errorMessage :: Connection
              -> IO (Maybe B.ByteString)
-errorMessage conn = withConn conn $ \cptr -> do
-        strptr <- c_PQerrorMessage cptr
-        if strptr == nullPtr
-          then return Nothing
-          else Just `fmap` B.packCString strptr
+errorMessage = statusString c_PQerrorMessage
 
 -- | Obtains the file descriptor number of the connection socket to
 -- the server. (This will not change during normal operation, but
@@ -639,9 +635,9 @@ socket :: Connection
        -> IO (Maybe Fd)
 socket connection =
     do cFd <- withConn connection c_PQsocket
-       return $ case cFd of
-                  -1 -> Nothing
-                  _ -> Just $ Fd cFd
+       case cFd of
+         -1 -> return Nothing
+         _  -> return $ Just $ Fd cFd
 
 
 -- | Returns the process 'CPid' of the backend server process
@@ -1391,7 +1387,6 @@ cmdTuples :: Result
           -> IO (Maybe B.ByteString)
 cmdTuples = flip maybeBsFromResult c_PQcmdTuples
 
-
 -- | Returns the 'Oid' of the inserted row, if the SQL command was an
 -- INSERT that inserted exactly one row into a table that has OIDs, or
 -- a EXECUTE of a prepared query containing a suitable INSERT
@@ -1400,10 +1395,7 @@ cmdTuples = flip maybeBsFromResult c_PQcmdTuples
 -- INSERT statement does not contain OIDs.
 oidValue :: Result
          -> IO (Maybe Oid)
-oidValue result =
-    withResult result $ \ptr ->
-        do oid <- c_PQoidValue ptr
-           return $ toMaybeOid oid
+oidValue result = toMaybeOid =<< withResult result c_PQoidValue
 
 -- | Escapes a string for use within an SQL command. This is useful
 -- when inserting data values as literal constants in SQL
@@ -1497,10 +1489,10 @@ data CopyInResult
      deriving (Eq, Show)
 
 
-toCopyInResult :: CInt -> CopyInResult
-toCopyInResult n | n < 0     = CopyInError
-                 | n == 0    = CopyInWouldBlock
-                 | otherwise = CopyInOk
+toCopyInResult :: CInt -> IO CopyInResult
+toCopyInResult n | n < 0     = return CopyInError
+                 | n == 0    = return CopyInWouldBlock
+                 | otherwise = return CopyInOk
 
 
 -- | Send raw @COPY@ data to the server during the 'CopyIn' state.
@@ -1511,8 +1503,8 @@ putCopyData conn bs =
 
 putCopyCString :: Connection -> CStringLen -> IO CopyInResult
 putCopyCString conn (str, len) =
-    toCopyInResult <$!>
-        withConn conn $ \ptr -> c_PQputCopyData ptr str (fromIntegral len)
+    toCopyInResult =<<
+        (withConn conn $ \ptr -> c_PQputCopyData ptr str (fromIntegral len))
 
 
 -- | Send end-of-data indication to the server during the 'CopyIn' state.
@@ -1526,12 +1518,12 @@ putCopyCString conn (str, len) =
 -- result status of the @COPY@ command.  Then return to normal operation.
 putCopyEnd :: Connection -> Maybe B.ByteString -> IO CopyInResult
 putCopyEnd conn Nothing =
-    toCopyInResult <$!>
-        withConn conn $ \ptr -> c_PQputCopyEnd ptr nullPtr
+    toCopyInResult =<<
+        (withConn conn $ \ptr -> c_PQputCopyEnd ptr nullPtr)
 putCopyEnd conn (Just errormsg) =
-    toCopyInResult <$!>
-        B.useAsCString errormsg $ \errormsg_cstr ->
-            withConn conn $ \ptr -> c_PQputCopyEnd ptr errormsg_cstr
+    toCopyInResult =<<
+        (B.useAsCString errormsg $ \errormsg_cstr ->
+            withConn conn $ \ptr -> c_PQputCopyEnd ptr errormsg_cstr)
 
 
 data CopyOutResult
@@ -2066,22 +2058,17 @@ loMode mode = case mode of
                 ReadWriteMode -> (#const INV_READ) .|. (#const INV_WRITE)
                 AppendMode    -> (#const INV_WRITE)
 
-(<$!>) :: (a -> b) -> IO a -> IO b
-f <$!> ma = ma >>= \a -> return $! f a
-infixr 0 <$!>
-{-# INLINE (<$!>) #-}
-
-toMaybeOid :: Oid -> Maybe Oid
-toMaybeOid oid | oid == invalidOid = Nothing
-               | otherwise         = Just oid
+toMaybeOid :: Oid -> IO (Maybe Oid)
+toMaybeOid oid | oid == invalidOid = return Nothing
+               | otherwise         = return (Just oid)
 {-# INLINE toMaybeOid #-}
 
-nonnegInt :: CInt -> Maybe Int
-nonnegInt x = if x < 0 then Nothing else Just (fromIntegral x)
+nonnegInt :: CInt -> IO (Maybe Int)
+nonnegInt x = if x < 0 then return Nothing else return (Just (fromIntegral x))
 {-# INLINE nonnegInt #-}
 
-negError  :: CInt -> Maybe ()
-negError x = if x < 0 then Nothing else Just ()
+negError  :: CInt -> IO (Maybe ())
+negError x = if x < 0 then return Nothing else return (Just ())
 {-# INLINE negError #-}
 
 -- | Creates a new large object,  returns the Object ID of the newly created
@@ -2090,7 +2077,7 @@ negError x = if x < 0 then Nothing else Just ()
 loCreat :: Connection -> IO (Maybe Oid)
 loCreat connection
     = withConn connection $ \c -> do
-        toMaybeOid <$!> c_lo_creat c (loMode ReadMode)
+        toMaybeOid =<< c_lo_creat c (loMode ReadMode)
 
 -- | Creates a new large object with a particular Object ID.  Returns
 -- 'Nothing' if the requested Object ID is already in use by some other
@@ -2100,7 +2087,7 @@ loCreat connection
 loCreate :: Connection -> Oid -> IO (Maybe Oid)
 loCreate connection oid
     = withConn connection $ \c -> do
-        toMaybeOid <$!> c_lo_create c oid
+        toMaybeOid =<< c_lo_create c oid
 
 -- | Imports an operating system file as a large object.  Note that the
 -- file is read by the client interface library, not by the server; so it
@@ -2111,7 +2098,7 @@ loImport :: Connection -> FilePath -> IO (Maybe Oid)
 loImport connection filepath
     = withConn connection $ \c -> do
         withCString filepath $ \f -> do
-          toMaybeOid <$!> c_lo_import c f
+          toMaybeOid =<< c_lo_import c f
 
 -- | Imports an operating system file as a large object with the given
 -- Object ID.  Combines the behavior of 'loImport' and 'loCreate'
@@ -2120,7 +2107,7 @@ loImportWithOid :: Connection -> FilePath -> Oid -> IO (Maybe Oid)
 loImportWithOid connection filepath oid
     = withConn connection $ \c -> do
         withCString filepath $ \f -> do
-          toMaybeOid <$!> c_lo_import_with_oid c f oid
+          toMaybeOid =<< c_lo_import_with_oid c f oid
 
 -- | Exports a large object into a operating system file.  Note that
 -- the file is written by the client interface library, not the server.
@@ -2130,7 +2117,7 @@ loExport :: Connection -> Oid -> FilePath -> IO (Maybe ())
 loExport connection oid filepath
     = withConn connection $ \c -> do
         withCString filepath $ \f -> do
-          negError <$!> c_lo_export c oid f
+          negError =<< c_lo_export c oid f
 
 -- | Opens an existing large object for reading or writing.  The Oid specifies
 -- the large object to open.  A large object cannot be opened before it is
@@ -2187,7 +2174,7 @@ loWrite :: Connection -> LoFd -> B.ByteString -> IO (Maybe Int)
 loWrite connection (LoFd fd) bytes
     = withConn connection $ \c -> do
         B.unsafeUseAsCStringLen bytes $ \(byteptr,len) -> do
-          nonnegInt <$!> c_lo_write c fd byteptr (fromIntegral len)
+          nonnegInt =<< c_lo_write c fd byteptr (fromIntegral len)
 
 -- | @loRead conn fd len@ reads up to @len@ bytes from the large object
 -- descriptor @fd@.  In the event of an error,  'Nothing' is returned.
@@ -2219,14 +2206,14 @@ loSeek connection (LoFd fd) seekmode delta
                                      AbsoluteSeek -> #const SEEK_SET
                                      RelativeSeek -> #const SEEK_CUR
                                      SeekFromEnd  -> #const SEEK_END
-        return $! nonnegInt pos
+        nonnegInt pos
 
 -- | Obtains the current read or write location of a large object descriptor.
 
 loTell :: Connection -> LoFd -> IO (Maybe Int)
 loTell connection (LoFd fd)
     = withConn connection $ \c -> do
-        nonnegInt <$!> c_lo_tell c fd
+        nonnegInt =<< c_lo_tell c fd
 
 -- | Truncates a large object to a given length.  If the length is greater
 -- than the current large object,  then the large object is extended with
@@ -2240,7 +2227,7 @@ loTell connection (LoFd fd)
 loTruncate :: Connection -> LoFd -> Int -> IO (Maybe ())
 loTruncate connection (LoFd fd) size
     = withConn connection $ \c -> do
-        negError <$!> c_lo_truncate c fd (fromIntegral size)
+        negError =<< c_lo_truncate c fd (fromIntegral size)
 
 -- | Closes a large object descriptor.  Any large object descriptors that
 -- remain open at the end of a transaction will be closed automatically.
@@ -2248,14 +2235,14 @@ loTruncate connection (LoFd fd) size
 loClose :: Connection -> LoFd -> IO (Maybe ())
 loClose connection (LoFd fd)
     = withConn connection $ \c -> do
-        negError <$!> c_lo_close c fd
+        negError =<< c_lo_close c fd
 
 -- | Removes a large object from the database.
 
 loUnlink :: Connection -> Oid -> IO (Maybe ())
 loUnlink connection oid
     = withConn connection $ \c -> do
-        negError <$!> c_lo_unlink c oid
+        negError =<< c_lo_unlink c oid
 
 foreign import ccall        "libpq-fe.h PQconnectdb"
     c_PQconnectdb :: CString ->IO (Ptr PGconn)
