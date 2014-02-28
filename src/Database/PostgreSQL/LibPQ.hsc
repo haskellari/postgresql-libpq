@@ -770,9 +770,9 @@ execParams :: Connection                          -- ^ connection
 execParams connection statement params rFmt =
     do let (oids, values, lengths, formats) =
                foldl' accum ([],[],[],[]) $ reverse params
-           c_lengths = map toEnum lengths :: [CInt]
-           n = toEnum $ length params
-           f = toEnum $ fromEnum rFmt
+           !c_lengths = map toEnum lengths :: [CInt]
+           !n = toEnum $ length params
+           !f = toEnum $ fromEnum rFmt
        resultFromConn connection $ \c ->
            B.useAsCString statement $ \s ->
                withArray oids $ \ts ->
@@ -869,9 +869,9 @@ execPrepared :: Connection                     -- ^ connection
              -> IO (Maybe Result)              -- ^ result
 execPrepared connection stmtName mPairs rFmt =
     do let (values, lengths, formats) = foldl' accum ([],[],[]) $ reverse mPairs
-           c_lengths = map toEnum lengths :: [CInt]
-           n = toEnum $ length mPairs
-           f = toEnum $ fromEnum rFmt
+           !c_lengths = map toEnum lengths :: [CInt]
+           !n = toEnum $ length mPairs
+           !f = toEnum $ fromEnum rFmt
        resultFromConn connection $ \c ->
            B.useAsCString stmtName $ \s ->
                withMany (maybeWith B.useAsCString) values $ \c_values ->
@@ -1193,9 +1193,9 @@ fnumber (Result res) columnName =
     do num <- withForeignPtr res $ \resPtr ->
               B.useAsCString columnName $ \columnNamePtr ->
                   c_PQfnumber resPtr columnNamePtr
-       return $! if num == -1
-                   then Nothing
-                   else Just $ toColumn num
+       if num == -1
+         then return Nothing
+         else return $ Just $ toColumn num
 
 
 -- | Returns the OID of the table from which the given column was
@@ -1552,10 +1552,10 @@ getCopyData :: Connection -> Bool -> IO CopyOutResult
 getCopyData conn async = alloca $ \strp -> withConn conn $ \c -> do
     len <- c_PQgetCopyData c strp $! (fromIntegral (fromEnum async))
     if len <= 0
-      then return $! case compare len (-1) of
-                       LT -> CopyOutError
-                       EQ -> CopyOutDone
-                       GT -> CopyOutWouldBlock
+      then case compare len (-1) of
+             LT -> return CopyOutError
+             EQ -> return CopyOutDone
+             GT -> return CopyOutWouldBlock
       else do
         fp <- newForeignPtr p_PQfreemem =<< peek strp
         return $! CopyOutRow (B.fromForeignPtr fp 0 (fromIntegral len))
@@ -1612,9 +1612,9 @@ sendQueryParams :: Connection
 sendQueryParams connection statement params rFmt =
     do let (oids, values, lengths, formats) =
                foldl' accum ([],[],[],[]) $ reverse params
-           c_lengths = map toEnum lengths :: [CInt]
-           n = toEnum $ length params
-           f = toEnum $ fromEnum rFmt
+           !c_lengths = map toEnum lengths :: [CInt]
+           !n = toEnum $ length params
+           !f = toEnum $ fromEnum rFmt
        enumFromConn connection $ \c ->
            B.useAsCString statement $ \s ->
                withArray oids $ \ts ->
@@ -1662,9 +1662,9 @@ sendQueryPrepared :: Connection
                   -> IO Bool
 sendQueryPrepared connection stmtName mPairs rFmt =
     do let (values, lengths, formats) = foldl' accum ([],[],[]) $ reverse mPairs
-           c_lengths = map toEnum lengths :: [CInt]
-           n = toEnum $ length mPairs
-           f = toEnum $ fromEnum rFmt
+           !c_lengths = map toEnum lengths :: [CInt]
+           !n = toEnum $ length mPairs
+           !f = toEnum $ fromEnum rFmt
        enumFromConn connection $ \c ->
            B.useAsCString stmtName $ \s ->
                withMany (maybeWith B.useAsCString) values $ \c_values ->
@@ -1788,10 +1788,10 @@ flush :: Connection
       -> IO FlushStatus
 flush connection =
     do stat <- withConn connection c_PQflush
-       return $ case stat of
-                  0 -> FlushOk
-                  1 -> FlushWriting
-                  _ -> FlushFailed
+       case stat of
+         0 -> return FlushOk
+         1 -> return FlushWriting
+         _ -> return FlushFailed
 
 
 -- $cancel
@@ -1868,9 +1868,9 @@ cancel (Cancel fp) =
 -- subsequently be detected by calling 'notifies'.
 
 data Notify = Notify {
-      notifyRelname :: B.ByteString -- ^ notification channel name
-    , notifyBePid   :: CPid         -- ^ process ID of notifying server process
-    , notifyExtra   :: B.ByteString -- ^ notification payload string
+      notifyRelname :: {-# UNPACK #-} !B.ByteString -- ^ notification channel name
+    , notifyBePid   :: {-# UNPACK #-} !CPid         -- ^ process ID of notifying server process
+    , notifyExtra   :: {-# UNPACK #-} !B.ByteString -- ^ notification payload string
     } deriving Show
 
 #let alignment t = "%lu", (unsigned long)offsetof(struct {char x__; t (y__); }, y__)
@@ -1883,7 +1883,7 @@ instance Storable Notify where
       relname <- B.packCString =<< #{peek PGnotify, relname} ptr
       extra   <- B.packCString =<< #{peek PGnotify, extra} ptr
       be_pid  <- fmap f $ #{peek PGnotify, be_pid} ptr
-      return $ Notify relname be_pid extra
+      return $! Notify relname be_pid extra
       where
         f :: CInt -> CPid
         f = fromIntegral
