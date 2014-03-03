@@ -1989,7 +1989,7 @@ setErrorVerbosity connection verbosity =
 withConn :: Connection
          -> (Ptr PGconn -> IO b)
          -> IO b
-withConn (Conn fp) f = withForeignPtr fp f
+withConn (Conn !fp) f = withForeignPtr fp f
 
 
 enumFromConn :: (Integral a, Enum b) => Connection
