@@ -1160,14 +1160,14 @@ resultErrorField (Result fp) fieldcode =
 -- return value on 32-bit operating systems.
 ntuples :: Result
         -> IO Row
-ntuples (Result res) = withForeignPtr res (return . toRow . c_PQntuples)
+ntuples res = withResult res (return . toRow . c_PQntuples)
 
 
 -- | Returns the number of columns (fields) in each row of the query
 -- result.
 nfields :: Result
         -> IO Column
-nfields (Result res) = withForeignPtr res (return . toColumn . c_PQnfields)
+nfields res = withResult res (return . toColumn . c_PQnfields)
 
 
 newtype Column = Col CInt  deriving (Eq, Ord, Show, Enum, Num)
@@ -1194,8 +1194,8 @@ fname result (Col colNum) =
 fnumber :: Result
         -> B.ByteString
         -> IO (Maybe Column)
-fnumber (Result res) columnName =
-    do num <- withForeignPtr res $ \resPtr ->
+fnumber res columnName =
+    do num <- withResult res $ \resPtr ->
               B.useAsCString columnName $ \columnNamePtr ->
                   c_PQfnumber resPtr columnNamePtr
        if num == -1
@@ -1308,8 +1308,8 @@ getvalue' :: Result
           -> Row
           -> Column
           -> IO (Maybe B.ByteString)
-getvalue' (Result fp) (Row rowNum) (Col colNum) =
-    withForeignPtr fp $ \ptr -> do
+getvalue' res (Row rowNum) (Col colNum) =
+    withResult res $ \ptr -> do
       isnull <- c_PQgetisnull ptr rowNum colNum
       if toEnum $ fromIntegral isnull
         then return $ Nothing
