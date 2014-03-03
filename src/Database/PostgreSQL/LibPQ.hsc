@@ -140,6 +140,9 @@ module Database.PostgreSQL.LibPQ
     , escapeByteaConn
     , unescapeBytea
 
+    -- * Escaping Identifiers for Inclusion in SQL Commands
+    , escapeIdentifier
+
     -- * Using COPY
     -- $copy
     , CopyInResult(..)
@@ -231,6 +234,13 @@ import qualified Data.ByteString as B
 
 #if __GLASGOW_HASKELL__ >= 700 && __GLASGOW_HASKELL__ < 706
 import Control.Concurrent (newMVar, tryTakeMVar)
+#endif
+
+#if __GLASGOW_HASKELL__ >= 700
+import Control.Exception (mask_)
+#else
+import qualified Control.Exception
+mask_ = Control.Exception.block
 #endif
 
 -- $dbconn
@@ -1452,6 +1462,33 @@ unescapeBytea bs =
                     l <- peek to_length
                     return $! Just $! B.fromForeignPtr tofp 0 $ fromIntegral l
 
+-- | @escapeIdentifier@ escapes a string for use as an SQL identifier, such
+--   as a table, column, or function name. This is useful when a user-supplied
+--   identifier might contain special characters that would otherwise not be
+--   interpreted as part of the identifier by the SQL parser, or when the
+--   identifier might contain upper case characters whose case should be
+--   preserved.
+--
+--   The return string has all special characters replaced so that it will
+--   be properly processed as an SQL identifier. The return string will also
+--   be surrounded by double quotes.
+--
+--   On error, @escapeIdentifier@ returns 'Nothing' and a suitable message
+--   is stored in the conn object.
+
+escapeIdentifier :: Connection
+                 -> B.ByteString
+                 -> IO (Maybe B.ByteString)
+escapeIdentifier connection bs =
+  withConn connection $ \conn ->
+    B.unsafeUseAsCStringLen bs $ \(from, bslen) -> mask_ $ do
+      bs'ptr <- c_PQescapeIdentifier conn from (fromIntegral bslen)
+      if bs'ptr == nullPtr
+        then return Nothing
+        else do
+            bs' <- B.packCString bs'ptr
+            c_PQfreemem bs'ptr
+            return $ Just bs'
 
 -- $copy
 --
@@ -2488,6 +2525,12 @@ foreign import ccall        "libpq-fe.h PQunescapeBytea"
     c_PQunescapeBytea :: CString -- Actually (Ptr CUChar)
                       -> Ptr CSize
                       -> IO (Ptr Word8) -- Actually (IO (Ptr CUChar))
+
+foreign import ccall unsafe "libpq-fe.h PQescapeIdentifier"
+    c_PQescapeIdentifier :: Ptr PGconn
+                         -> CString
+                         -> CSize
+                         -> IO CString
 
 foreign import ccall unsafe "libpq-fe.h &PQfreemem"
     p_PQfreemem :: FunPtr (Ptr a -> IO ())
