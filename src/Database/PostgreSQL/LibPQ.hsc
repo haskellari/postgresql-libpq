@@ -132,7 +132,6 @@ module Database.PostgreSQL.LibPQ
     -- $othercommands
     , cmdStatus
     , cmdTuples
-    , oidValue
 
     -- * Escaping Strings for Inclusion in SQL Commands
     , escapeStringConn
@@ -1387,16 +1386,6 @@ cmdTuples :: Result
           -> IO (Maybe B.ByteString)
 cmdTuples = flip maybeBsFromResult c_PQcmdTuples
 
--- | Returns the 'Oid' of the inserted row, if the SQL command was an
--- INSERT that inserted exactly one row into a table that has OIDs, or
--- a EXECUTE of a prepared query containing a suitable INSERT
--- statement. Otherwise, this function returns 'Nothing'. This
--- function will also return 'Nothing' if the table affected by the
--- INSERT statement does not contain OIDs.
-oidValue :: Result
-         -> IO (Maybe Oid)
-oidValue result = toMaybeOid =<< withResult result c_PQoidValue
-
 -- | Escapes a string for use within an SQL command. This is useful
 -- when inserting data values as literal constants in SQL
 -- commands. Certain characters (such as quotes and backslashes) must
@@ -2479,9 +2468,6 @@ foreign import ccall unsafe "libpq-fe.h PQcmdStatus"
 
 foreign import ccall unsafe "libpq-fe.h PQcmdTuples"
     c_PQcmdTuples :: Ptr PGresult -> IO CString
-
-foreign import ccall unsafe "libpq-fe.h PQoidValue"
-    c_PQoidValue :: Ptr PGresult -> IO Oid
 
 foreign import ccall        "libpq-fe.h PQescapeStringConn"
     c_PQescapeStringConn :: Ptr PGconn
