@@ -30,7 +30,7 @@ Library
   GHC-Options:       -Wall
   Extra-Libraries: pq
   if os(openbsd)
-    Extra-Libraries:  crypto ssl com_err asn1 krb5 wind roken heimbase
+    Extra-Libraries:  crypto ssl
 
   -- Other-modules:
   Build-tools:       hsc2hs
