@@ -185,6 +185,11 @@ module Database.PostgreSQL.LibPQ
     , Verbosity(..)
     , setErrorVerbosity
 
+    -- * Nonfatal Error Reporting
+    , disableNoticeReporting
+    , enableNoticeReporting
+    , getNotice
+
     -- * Large Objects
     -- $largeobjects
     , LoFd(..)
@@ -206,6 +211,7 @@ where
 
 #include <libpq-fe.h>
 #include <libpq/libpq-fs.h>
+#include "noticehandlers.h"
 
 import Prelude hiding ( print )
 import Foreign
@@ -229,6 +235,7 @@ import qualified Data.ByteString.Unsafe as B
 import qualified Data.ByteString.Internal as B ( fromForeignPtr
                                                , c_strlen
                                                , createAndTrim
+                                               , ByteString(..)
                                                )
 import qualified Data.ByteString as B
 
@@ -2070,6 +2077,38 @@ maybeBsFromForeignPtr fp f =
 --     where
 --       finalizer = touchForeignPtr fp
 
+data CNoticeBuffer
+newtype NoticeBuffer = NoticeBuffer (ForeignPtr CNoticeBuffer)
+
+type NoticeReceiver = Ptr CNoticeBuffer -> Ptr PGresult -> IO ()
+
+disableNoticeReporting :: Connection -> IO ()
+disableNoticeReporting conn = do
+    _ <- withConn conn $ \c -> c_PQsetNoticeReceiver c p_discard_notices nullPtr
+    return ()
+
+enableNoticeReporting :: Connection -> IO NoticeBuffer
+enableNoticeReporting conn@(Conn !c) = do
+    nbp <- c_malloc_noticebuffer
+    nbfp <- newForeignPtr finalizerFree nbp
+    FC.addForeignPtrFinalizer c (touchForeignPtr nbfp)
+    _ <- withConn conn $ \c -> c_PQsetNoticeReceiver c p_store_notices nbp
+    return (NoticeBuffer nbfp)
+
+getNotice :: NoticeBuffer -> IO (Maybe B.ByteString)
+getNotice (NoticeBuffer !nbfp) =
+    withForeignPtr nbfp $ \nbp -> do
+      np <- c_get_notice nbp
+      if np == nullPtr
+        then return Nothing
+        else do
+          str <- #{peek CStringLen, str} np
+          len <- #{peek CStringLen, len} np
+          bs <- B.unsafePackCStringLen $! (str,len)
+          addForeignPtrFinalizer finalizerFree $! (\(B.PS fp _ _) -> fp) bs
+          return $ Just bs
+
+
 -- $largeobjects
 
 -- | LoFd is a Large Object (pseudo) File Descriptor.  It is understood by
@@ -2269,6 +2308,8 @@ loUnlink :: Connection -> Oid -> IO (Maybe ())
 loUnlink connection oid
     = withConn connection $ \c -> do
         negError =<< c_lo_unlink c oid
+
+
 
 foreign import ccall        "libpq-fe.h PQconnectdb"
     c_PQconnectdb :: CString ->IO (Ptr PGconn)
@@ -2537,6 +2578,22 @@ foreign import ccall unsafe "libpq-fe.h &PQfreemem"
 
 foreign import ccall unsafe "libpq-fe.h PQfreemem"
     c_PQfreemem :: Ptr a -> IO ()
+
+foreign import ccall unsafe "noticehandlers.h hs_postgresql_libpq_malloc_noticebuffer"
+    c_malloc_noticebuffer :: IO (Ptr CNoticeBuffer)
+
+foreign import ccall unsafe "noticehandlers.h hs_postgresql_libpq_get_notice"
+    c_get_notice :: Ptr CNoticeBuffer -> IO (Ptr CStringLen)
+
+foreign import ccall unsafe "noticehandlers.h &hs_postgresql_libpq_discard_notices"
+    p_discard_notices :: FunPtr NoticeReceiver
+
+foreign import ccall unsafe "noticehandlers.h &hs_postgresql_libpq_store_notices"
+    p_store_notices :: FunPtr NoticeReceiver
+
+foreign import ccall unsafe "libpq-fe.h PQsetNoticeReceiver"
+    c_PQsetNoticeReceiver :: Ptr PGconn -> FunPtr NoticeReceiver -> Ptr CNoticeBuffer -> IO (FunPtr NoticeReceiver)
+
 
 type CFd = CInt
 
