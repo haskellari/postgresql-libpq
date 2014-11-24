@@ -2101,6 +2101,8 @@ type NoticeBuffer = Ptr CNoticeBuffer
 
 type NoticeReceiver = NoticeBuffer -> Ptr PGresult -> IO ()
 
+data PGnotice
+
 disableNoticeReporting :: Connection -> IO ()
 disableNoticeReporting conn@(Conn _ nbRef) = do
     _ <- withConn conn $ \c -> c_PQsetNoticeReceiver c p_discard_notices nullPtr
@@ -2121,15 +2123,9 @@ getNotice (Conn _ nbRef) =
       if np == nullPtr
         then return Nothing
         else do
-          cstr <- #{peek CStringLen, str} np
-          len  <- #{peek CStringLen, len} np
-#if MIN_VERSION_bytestring(0,10,4)
-          bs <- B.unsafePackMallocCStringLen $! (str, len)
-#else
-          fp <- newForeignPtr finalizerFree (castPtr cstr)
-          let !bs = B.PS fp 0 len
-#endif
-          return $ Just bs
+          fp <- newForeignPtr finalizerFree (castPtr np)
+          len  <- #{peek PGnotice, len} np
+          return $! Just $! B.PS fp (#offset PGnotice, str) len
 
 -- $largeobjects
 
@@ -2605,7 +2601,7 @@ foreign import ccall unsafe "noticehandlers.h hs_postgresql_libpq_malloc_noticeb
     c_malloc_noticebuffer :: IO (Ptr CNoticeBuffer)
 
 foreign import ccall unsafe "noticehandlers.h hs_postgresql_libpq_get_notice"
-    c_get_notice :: Ptr CNoticeBuffer -> IO (Ptr CStringLen)
+    c_get_notice :: Ptr CNoticeBuffer -> IO (Ptr PGnotice)
 
 foreign import ccall unsafe "noticehandlers.h &hs_postgresql_libpq_discard_notices"
     p_discard_notices :: FunPtr NoticeReceiver

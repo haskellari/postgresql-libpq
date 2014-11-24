@@ -1,14 +1,13 @@
 #include <libpq-fe.h>
 #include <string.h>
-#define NOTICE_BUFFER_SIZE 32
 
-typedef struct {
-  char*  str;
+typedef struct PGnotice{
+  struct PGnotice * next;
   size_t len;
-} CStringLen;
+  char   str[];
+} PGnotice;
 
 typedef struct {
-  unsigned int start;
-  unsigned int count;
-  CStringLen buffer[NOTICE_BUFFER_SIZE];
+  PGnotice * first;
+  PGnotice * last;
 } NoticeBuffer;

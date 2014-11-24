@@ -11,29 +11,28 @@ hs_postgresql_libpq_store_notices(NoticeBuffer* arg, const PGresult* res) {
   if (arg == NULL || res == NULL) return;
   const char* msg = PQresultErrorMessage(res);
   if (msg == NULL) return;
-  CStringLen str;
-  str.len = strlen(msg);
-  str.str = (char*)malloc(str.len+1);
-  if (str.str == NULL) return;
-  memcpy(str.str, msg, str.len+1);
-  unsigned int start = arg->start;
-  unsigned int count = arg->count;
-  if ( count == NOTICE_BUFFER_SIZE ) {
-    free(arg->buffer[start].str);
-    arg->buffer[start] = str;
-    arg->start = (start + 1) % NOTICE_BUFFER_SIZE;
+  size_t len = strlen(msg);
+  PGnotice* notice = (PGnotice*)malloc(sizeof(PGnotice) + sizeof(char)*(len + 1));
+  notice->next = NULL;
+  notice->len  = len;
+  memcpy(notice->str, msg, len+1);
+  if (arg->last == NULL) {
+    arg->first = notice;
+    arg->last  = notice;
   } else {
-    arg->buffer[ (start + count) % NOTICE_BUFFER_SIZE ] = str;
-    arg->count++;
+    arg->last->next = notice;
+    arg->last = notice;
   }
 }
 
-CStringLen *
+PGnotice *
 hs_postgresql_libpq_get_notice(NoticeBuffer* arg) {
-  if (arg == NULL || arg->count == 0) return NULL;
-  CStringLen * res = &(arg->buffer[arg->start]);
-  arg->start = (arg->start + 1) % NOTICE_BUFFER_SIZE;
-  arg->count--;
+  if (arg == NULL) return NULL;
+  PGnotice * res  = arg->first;
+  if (res == NULL) return NULL;
+  PGnotice * next = res->next;
+  arg->first = next;
+  if (next == NULL) arg->last = NULL;
   return res;
 }
 
