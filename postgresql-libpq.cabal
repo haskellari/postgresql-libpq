@@ -28,9 +28,12 @@ Library
                      , bytestring
 
   GHC-Options:       -Wall
-  Extra-Libraries: pq
-  if os(openbsd)
-    Extra-Libraries:  crypto ssl
+  if os(linux)
+    Pkgconfig-depends:   libpq
+  else
+    Extra-Libraries:     pq
+    if os(openbsd)
+      Extra-Libraries:     crypto ssl
 
   -- Other-modules:
   Build-tools:       hsc2hs
