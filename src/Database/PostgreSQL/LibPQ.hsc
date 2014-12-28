@@ -232,7 +232,7 @@ import qualified Data.ByteString.Internal as B ( fromForeignPtr
                                                )
 import qualified Data.ByteString as B
 
-#if __GLASGOW_HASKELL__ >= 700 && __GLASGOW_HASKELL__ < 706
+#if __GLASGOW_HASKELL__ >= 700
 import Control.Concurrent (newMVar, tryTakeMVar)
 #endif
 
@@ -276,7 +276,8 @@ connectdb conninfo =
     do connPtr <- B.useAsCString conninfo c_PQconnectdb
        if connPtr == nullPtr
            then fail "libpq failed to allocate a PGconn structure"
-#if __GLASGOW_HASKELL__ >= 706
+#if 0
+-- FIXME:  #if __GLASGOW_HASKELL__ >= ???
            else Conn `fmap` FC.newForeignPtr connPtr (pqfinish connPtr)
 #elif __GLASGOW_HASKELL__ >= 700
            else Conn `fmap` newForeignPtrOnce connPtr (pqfinish connPtr)
@@ -291,7 +292,8 @@ connectStart connStr =
     do connPtr <- B.useAsCString connStr c_PQconnectStart
        if connPtr == nullPtr
            then fail "libpq failed to allocate a PGconn structure"
-#if __GLASGOW_HASKELL__ >= 706
+#if 0
+-- FIXME:  #if __GLASGOW_HASKELL__ >= ???
            else Conn `fmap` FC.newForeignPtr connPtr (pqfinish connPtr)
 #elif __GLASGOW_HASKELL__ >= 700
            else Conn `fmap` newForeignPtrOnce connPtr (pqfinish connPtr)
@@ -316,7 +318,7 @@ pqfinish conn = do
      fd -> closeFdWith (\_ -> c_PQfinish conn) (Fd fd)
 #endif
 
-#if __GLASGOW_HASKELL__ >= 700 && __GLASGOW_HASKELL__ < 706
+#if __GLASGOW_HASKELL__ >= 700
 -- | Workaround for bug in 'FC.newForeignPtr' before base 4.6.  Ensure the
 -- finalizer is only run once, to prevent a segfault.  See GHC ticket #7170
 --
