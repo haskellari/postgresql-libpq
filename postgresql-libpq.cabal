@@ -20,6 +20,13 @@ Category:            Database
 Build-type:          Custom
 -- Extra-source-files:
 Cabal-version:       >=1.8
+
+-- If true,  use pkg-config,  otherwise use the pg_config based build 
+-- configuration
+Flag use-pkg-config
+  default: False
+  manual:  True
+
 Library
   hs-source-dirs:      src
   Exposed-modules:     Database.PostgreSQL.LibPQ
@@ -28,7 +35,7 @@ Library
                      , bytestring
 
   GHC-Options:       -Wall
-  if os(linux)
+  if flag(use-pkg-config)
     Pkgconfig-depends:   libpq
   else
     Extra-Libraries:     pq
