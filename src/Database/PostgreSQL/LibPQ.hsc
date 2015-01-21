@@ -273,7 +273,8 @@ data PGconn
 connectdb :: B.ByteString -- ^ Connection Info
           -> IO Connection
 connectdb conninfo =
-    do connPtr <- B.useAsCString conninfo c_PQconnectdb
+    mask_ $ do
+       connPtr <- B.useAsCString conninfo c_PQconnectdb
        if connPtr == nullPtr
            then fail "libpq failed to allocate a PGconn structure"
 #if 0
@@ -289,7 +290,8 @@ connectdb conninfo =
 connectStart :: B.ByteString -- ^ Connection Info
              -> IO Connection
 connectStart connStr =
-    do connPtr <- B.useAsCString connStr c_PQconnectStart
+    mask_ $ do
+       connPtr <- B.useAsCString connStr c_PQconnectStart
        if connPtr == nullPtr
            then fail "libpq failed to allocate a PGconn structure"
 #if 0
@@ -1834,7 +1836,7 @@ data PGcancel
 getCancel :: Connection
           -> IO (Maybe Cancel)
 getCancel connection =
-    withConn connection $ \conn ->
+    mask_ $ withConn connection $ \conn ->
         do ptr <- c_PQgetCancel conn
            if ptr == nullPtr
              then return Nothing
@@ -2004,7 +2006,8 @@ resultFromConn :: Connection
                -> (Ptr PGconn -> IO (Ptr PGresult))
                -> IO (Maybe Result)
 resultFromConn connection f =
-    do resPtr <- withConn connection f
+    mask_ $ do
+       resPtr <- withConn connection f
        if resPtr == nullPtr
            then return Nothing
            else (Just . Result) `fmap` newForeignPtr p_PQclear resPtr
