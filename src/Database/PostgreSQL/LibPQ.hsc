@@ -2107,14 +2107,15 @@ disableNoticeReporting :: Connection -> IO ()
 disableNoticeReporting conn@(Conn _ nbRef) = do
     _ <- withConn conn $ \c -> c_PQsetNoticeReceiver c p_discard_notices nullPtr
     nb <- swapMVar nbRef nullPtr
-    when (nb /= nullPtr) (free nb)
+    c_free_noticebuffer nb
+
 
 enableNoticeReporting :: Connection -> IO ()
 enableNoticeReporting conn@(Conn _ nbRef) = do
     nb' <- c_malloc_noticebuffer
     _ <- withConn conn $ \c -> c_PQsetNoticeReceiver c p_store_notices nb'
     nb  <- swapMVar nbRef nb'
-    when (nb /= nullPtr) (free nb)
+    c_free_noticebuffer nb
 
 getNotice :: Connection -> IO (Maybe B.ByteString)
 getNotice (Conn _ nbRef) =
@@ -2599,6 +2600,9 @@ foreign import ccall unsafe "libpq-fe.h PQfreemem"
 
 foreign import ccall unsafe "noticehandlers.h hs_postgresql_libpq_malloc_noticebuffer"
     c_malloc_noticebuffer :: IO (Ptr CNoticeBuffer)
+
+foreign import ccall unsafe "noticehandlers.h hs_postgresql_libpq_free_noticebuffer"
+    c_free_noticebuffer :: Ptr CNoticeBuffer -> IO ()
 
 foreign import ccall unsafe "noticehandlers.h hs_postgresql_libpq_get_notice"
     c_get_notice :: Ptr CNoticeBuffer -> IO (Ptr PGnotice)

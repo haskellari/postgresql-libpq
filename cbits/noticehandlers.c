@@ -1,4 +1,5 @@
 #include "noticehandlers.h"
+#include <libpq-fe.h>
 #include <stdlib.h>
 
 void
@@ -40,6 +41,19 @@ NoticeBuffer *
 hs_postgresql_libpq_malloc_noticebuffer (void) {
   NoticeBuffer * arg = (NoticeBuffer*)malloc(sizeof(NoticeBuffer));
   if (arg == NULL) return NULL;
-  memset(arg, 0, sizeof(NoticeBuffer));
+  arg->first = NULL;
+  arg->last  = NULL;
   return arg;
+}
+
+void
+hs_postgresql_libpq_free_noticebuffer (NoticeBuffer * arg) {
+  if (arg == NULL) return;
+  PGnotice * x = arg->first;
+  PGnotice * nx;
+  while (x != NULL) {
+    nx = x->next;
+    free(x);
+    x = nx;
+  }
 }

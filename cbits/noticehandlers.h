@@ -1,4 +1,3 @@
-#include <libpq-fe.h>
 #include <string.h>
 
 typedef struct PGnotice{
