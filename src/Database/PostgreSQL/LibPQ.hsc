@@ -185,6 +185,11 @@ module Database.PostgreSQL.LibPQ
     , Verbosity(..)
     , setErrorVerbosity
 
+    -- * Nonfatal Error Reporting
+    , disableNoticeReporting
+    , enableNoticeReporting
+    , getNotice
+
     -- * Large Objects
     -- $largeobjects
     , LoFd(..)
@@ -206,6 +211,7 @@ where
 
 #include <libpq-fe.h>
 #include <libpq/libpq-fs.h>
+#include "noticehandlers.h"
 
 import Prelude hiding ( print )
 import Foreign
@@ -215,6 +221,7 @@ import Foreign.C.String
 import qualified Foreign.ForeignPtr.Unsafe as Unsafe
 #endif
 import qualified Foreign.Concurrent as FC
+import Control.Monad(when)
 import System.Posix.Types ( Fd(..) )
 import Data.List ( foldl' )
 import System.IO ( IOMode(..), SeekMode(..) )
@@ -229,12 +236,11 @@ import qualified Data.ByteString.Unsafe as B
 import qualified Data.ByteString.Internal as B ( fromForeignPtr
                                                , c_strlen
                                                , createAndTrim
+                                               , ByteString(..)
                                                )
 import qualified Data.ByteString as B
 
-#if __GLASGOW_HASKELL__ >= 700
-import Control.Concurrent (newMVar, tryTakeMVar)
-#endif
+import Control.Concurrent.MVar
 
 #if __GLASGOW_HASKELL__ >= 700
 import Control.Exception (mask_)
@@ -254,7 +260,13 @@ mask_ = Control.Exception.block
 -- via the connection object.
 
 -- | 'Connection' encapsulates a connection to the backend.
-newtype Connection = Conn (ForeignPtr PGconn) deriving Eq
+data Connection = Conn {-# UNPACK #-} !(ForeignPtr PGconn)
+                       {-# UNPACK #-} !(MVar NoticeBuffer)
+
+instance Eq Connection where
+    (Conn c _) == (Conn d _) = c == d
+    (Conn c _) /= (Conn d _) = c /= d
+
 data PGconn
 
 -- | Makes a new connection to the database server.
@@ -277,14 +289,10 @@ connectdb conninfo =
        connPtr <- B.useAsCString conninfo c_PQconnectdb
        if connPtr == nullPtr
            then fail "libpq failed to allocate a PGconn structure"
-#if 0
--- FIXME:  #if __GLASGOW_HASKELL__ >= ???
-           else Conn `fmap` FC.newForeignPtr connPtr (pqfinish connPtr)
-#elif __GLASGOW_HASKELL__ >= 700
-           else Conn `fmap` newForeignPtrOnce connPtr (pqfinish connPtr)
-#else
-           else Conn `fmap` newForeignPtr p_PQfinish connPtr
-#endif
+           else do
+             noticeBuffer <- newMVar nullPtr
+             connection <- newForeignPtrOnce connPtr (pqfinish connPtr noticeBuffer)
+             return $! Conn connection noticeBuffer
 
 -- | Make a connection to the database server in a nonblocking manner.
 connectStart :: B.ByteString -- ^ Connection Info
@@ -294,33 +302,32 @@ connectStart connStr =
        connPtr <- B.useAsCString connStr c_PQconnectStart
        if connPtr == nullPtr
            then fail "libpq failed to allocate a PGconn structure"
-#if 0
--- FIXME:  #if __GLASGOW_HASKELL__ >= ???
-           else Conn `fmap` FC.newForeignPtr connPtr (pqfinish connPtr)
-#elif __GLASGOW_HASKELL__ >= 700
-           else Conn `fmap` newForeignPtrOnce connPtr (pqfinish connPtr)
-#else
-           else Conn `fmap` newForeignPtr p_PQfinish connPtr
-#endif
+           else do
+             noticeBuffer <- newMVar nullPtr
+             connection <- newForeignPtrOnce connPtr (pqfinish connPtr noticeBuffer)
+             return $! Conn connection noticeBuffer
 
+pqfinish :: Ptr PGconn -> MVar NoticeBuffer -> IO ()
+pqfinish conn noticeBuffer = do
 #if __GLASGOW_HASKELL__ >= 700
--- | This covers the case when a connection is closed while other Haskell
+--   This covers the case when a connection is closed while other Haskell
 --   threads are using GHC's IO manager to wait on the descriptor.  This is
 --   commonly the case with asynchronous notifications, for example.  Since
 --   libpq is responsible for opening and closing the file descriptor, GHC's
 --   IO manager needs to be informed that the file descriptor has been
 --   closed.  The IO manager will then raise an exception in those threads.
-pqfinish :: Ptr PGconn -> IO ()
-pqfinish conn = do
    mfd <- c_PQsocket conn
    case mfd of
      -1 -> -- This can happen if the connection is bad/lost
            -- This case may be worth investigating further
            c_PQfinish conn
      fd -> closeFdWith (\_ -> c_PQfinish conn) (Fd fd)
+#else
+   c_PQfinish conn
 #endif
+   nb <- swapMVar noticeBuffer nullPtr
+   when (nb /= nullPtr) (free nb)
 
-#if __GLASGOW_HASKELL__ >= 700
 -- | Workaround for bug in 'FC.newForeignPtr' before base 4.6.  Ensure the
 -- finalizer is only run once, to prevent a segfault.  See GHC ticket #7170
 --
@@ -330,19 +337,21 @@ newForeignPtrOnce :: Ptr a -> IO () -> IO (ForeignPtr a)
 newForeignPtrOnce ptr fin = do
     mv <- newMVar fin
     FC.newForeignPtr ptr $ tryTakeMVar mv >>= maybe (return ()) id
-#endif
 
 -- | Allocate a Null Connection,  which all libpq functions
 -- should safely fail on.
 newNullConnection :: IO Connection
-newNullConnection = Conn `fmap` newForeignPtr_ nullPtr
+newNullConnection = do
+  connection   <- newForeignPtr_ nullPtr
+  noticeBuffer <- newMVar nullPtr
+  return $! Conn connection noticeBuffer
 
 -- | Test if a connection is the Null Connection.
 isNullConnection :: Connection -> Bool
 #if __GLASGOW_HASKELL__ >= 702
-isNullConnection (Conn x) = Unsafe.unsafeForeignPtrToPtr x == nullPtr
+isNullConnection (Conn x _) = Unsafe.unsafeForeignPtrToPtr x == nullPtr
 #else
-isNullConnection (Conn x) = unsafeForeignPtrToPtr x == nullPtr
+isNullConnection (Conn x _) = unsafeForeignPtrToPtr x == nullPtr
 #endif
 {-# INLINE isNullConnection #-}
 
@@ -452,7 +461,7 @@ pollHelper poller connection =
 -- has been called.
 finish :: Connection
        -> IO ()
-finish (Conn fp) =
+finish (Conn fp _) =
     do finalizeForeignPtr fp
 
 
@@ -1993,7 +2002,7 @@ setErrorVerbosity connection verbosity =
 withConn :: Connection
          -> (Ptr PGconn -> IO b)
          -> IO b
-withConn (Conn !fp) f = withForeignPtr fp f
+withConn (Conn !fp _) f = withForeignPtr fp f
 
 
 enumFromConn :: (Integral a, Enum b) => Connection
@@ -2074,6 +2083,38 @@ maybeBsFromForeignPtr fp f =
 --                      return $ B.fromForeignPtr fp' 0 l
 --     where
 --       finalizer = touchForeignPtr fp
+
+data CNoticeBuffer
+type NoticeBuffer = Ptr CNoticeBuffer
+
+type NoticeReceiver = NoticeBuffer -> Ptr PGresult -> IO ()
+
+data PGnotice
+
+disableNoticeReporting :: Connection -> IO ()
+disableNoticeReporting conn@(Conn _ nbRef) = do
+    _ <- withConn conn $ \c -> c_PQsetNoticeReceiver c p_discard_notices nullPtr
+    nb <- swapMVar nbRef nullPtr
+    c_free_noticebuffer nb
+
+
+enableNoticeReporting :: Connection -> IO ()
+enableNoticeReporting conn@(Conn _ nbRef) = do
+    nb' <- c_malloc_noticebuffer
+    _ <- withConn conn $ \c -> c_PQsetNoticeReceiver c p_store_notices nb'
+    nb  <- swapMVar nbRef nb'
+    c_free_noticebuffer nb
+
+getNotice :: Connection -> IO (Maybe B.ByteString)
+getNotice (Conn _ nbRef) =
+    withMVar nbRef $ \nb -> do
+      np <- c_get_notice nb
+      if np == nullPtr
+        then return Nothing
+        else do
+          fp <- newForeignPtr finalizerFree (castPtr np)
+          len  <- #{peek PGnotice, len} np
+          return $! Just $! B.PS fp (#offset PGnotice, str) len
 
 -- $largeobjects
 
@@ -2274,6 +2315,8 @@ loUnlink :: Connection -> Oid -> IO (Maybe ())
 loUnlink connection oid
     = withConn connection $ \c -> do
         negError =<< c_lo_unlink c oid
+
+
 
 foreign import ccall        "libpq-fe.h PQconnectdb"
     c_PQconnectdb :: CString ->IO (Ptr PGconn)
@@ -2542,6 +2585,25 @@ foreign import ccall unsafe "libpq-fe.h &PQfreemem"
 
 foreign import ccall unsafe "libpq-fe.h PQfreemem"
     c_PQfreemem :: Ptr a -> IO ()
+
+foreign import ccall unsafe "noticehandlers.h hs_postgresql_libpq_malloc_noticebuffer"
+    c_malloc_noticebuffer :: IO (Ptr CNoticeBuffer)
+
+foreign import ccall unsafe "noticehandlers.h hs_postgresql_libpq_free_noticebuffer"
+    c_free_noticebuffer :: Ptr CNoticeBuffer -> IO ()
+
+foreign import ccall unsafe "noticehandlers.h hs_postgresql_libpq_get_notice"
+    c_get_notice :: Ptr CNoticeBuffer -> IO (Ptr PGnotice)
+
+foreign import ccall unsafe "noticehandlers.h &hs_postgresql_libpq_discard_notices"
+    p_discard_notices :: FunPtr NoticeReceiver
+
+foreign import ccall unsafe "noticehandlers.h &hs_postgresql_libpq_store_notices"
+    p_store_notices :: FunPtr NoticeReceiver
+
+foreign import ccall unsafe "libpq-fe.h PQsetNoticeReceiver"
+    c_PQsetNoticeReceiver :: Ptr PGconn -> FunPtr NoticeReceiver -> Ptr CNoticeBuffer -> IO (FunPtr NoticeReceiver)
+
 
 type CFd = CInt
 
