@@ -221,7 +221,6 @@ import Foreign.C.String
 import qualified Foreign.ForeignPtr.Unsafe as Unsafe
 #endif
 import qualified Foreign.Concurrent as FC
-import Control.Monad(when)
 import System.Posix.Types ( Fd(..) )
 import Data.List ( foldl' )
 import System.IO ( IOMode(..), SeekMode(..) )
@@ -326,7 +325,7 @@ pqfinish conn noticeBuffer = do
    c_PQfinish conn
 #endif
    nb <- swapMVar noticeBuffer nullPtr
-   when (nb /= nullPtr) (free nb)
+   c_free_noticebuffer nb
 
 -- | Workaround for bug in 'FC.newForeignPtr' before base 4.6.  Ensure the
 -- finalizer is only run once, to prevent a segfault.  See GHC ticket #7170
