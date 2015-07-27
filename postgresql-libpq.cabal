@@ -18,7 +18,7 @@ Copyright:           (c) 2010 Grant Monroe
                      (c) 2011 Leon P Smith
 Category:            Database
 Build-type:          Custom
--- Extra-source-files:
+Extra-source-files:  cbits/noticehandlers.h
 Cabal-version:       >=1.8
 
 -- If true,  use pkg-config,  otherwise use the pg_config based build
