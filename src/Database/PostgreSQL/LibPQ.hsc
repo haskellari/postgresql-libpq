@@ -43,6 +43,7 @@
 {-# LANGUAGE ScopedTypeVariables        #-}
 {-# LANGUAGE BangPatterns               #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE DeriveDataTypeable         #-}
 
 module Database.PostgreSQL.LibPQ
     (
@@ -240,6 +241,8 @@ import qualified Data.ByteString.Internal as B ( fromForeignPtr
 import qualified Data.ByteString as B
 
 import Control.Concurrent.MVar
+
+import Data.Typeable
 
 #if __GLASGOW_HASKELL__ >= 700
 import Control.Exception (mask_)
@@ -714,7 +717,7 @@ data PGresult
 
 data Format = Text | Binary deriving (Eq, Ord, Show, Enum)
 
-newtype Oid = Oid CUInt deriving (Eq, Ord, Read, Show, Storable)
+newtype Oid = Oid CUInt deriving (Eq, Ord, Read, Show, Storable, Typeable)
 
 invalidOid :: Oid
 invalidOid = Oid (#const InvalidOid)
