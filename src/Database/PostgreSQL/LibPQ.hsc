@@ -2093,13 +2093,21 @@ type NoticeReceiver = NoticeBuffer -> Ptr PGresult -> IO ()
 
 data PGnotice
 
+-- | Upon connection initialization, any notices received from the server are
+--   normally written to the console.  Notices are akin to warnings, and
+--   are distinct from notifications.  This function suppresses notices.
+--   You may later call 'enableNoticeReporting' after calling this function.
 disableNoticeReporting :: Connection -> IO ()
 disableNoticeReporting conn@(Conn _ nbRef) = do
     _ <- withConn conn $ \c -> c_PQsetNoticeReceiver c p_discard_notices nullPtr
     nb <- swapMVar nbRef nullPtr
     c_free_noticebuffer nb
 
-
+-- | Upon connection initialization, any notices received from the server are
+--   normally written to the console.  Notices are akin to warnings, and
+--   are distinct from notifications.  This function enables notices to be
+--   programmatically retreived using the 'getNotice' function.   You may
+--   later call 'disableNoticeReporting' after calling this function.
 enableNoticeReporting :: Connection -> IO ()
 enableNoticeReporting conn@(Conn _ nbRef) = do
     nb' <- c_malloc_noticebuffer
@@ -2107,6 +2115,10 @@ enableNoticeReporting conn@(Conn _ nbRef) = do
     nb  <- swapMVar nbRef nb'
     c_free_noticebuffer nb
 
+-- |  This function retrieves any notices received from the backend.
+--    Because multiple notices can be received at a time,  you will
+--    typically want to call this function in a loop until you get
+--    back a 'Nothing'.
 getNotice :: Connection -> IO (Maybe B.ByteString)
 getNotice (Conn _ nbRef) =
     withMVar nbRef $ \nb -> do
