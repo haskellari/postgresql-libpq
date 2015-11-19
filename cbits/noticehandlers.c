@@ -56,4 +56,5 @@ hs_postgresql_libpq_free_noticebuffer (NoticeBuffer * arg) {
     free(x);
     x = nx;
   }
+  free(arg);
 }
