@@ -165,6 +165,7 @@ module Database.PostgreSQL.LibPQ
     , isBusy
     , setnonblocking
     , isnonblocking
+    , setSingleRowMode
     , FlushStatus(..)
     , flush
 
@@ -972,6 +973,10 @@ data ExecStatus = EmptyQuery    -- ^ The string sent to the server was empty.
                 | NonfatalError -- ^ A nonfatal error (a notice or
                                 -- warning) occurred.
                 | FatalError    -- ^ A fatal error occurred.
+                | SingleTuple   -- ^ The PGresult contains a single result tuple
+                                -- from the current command. This status occurs
+                                -- only when single-row mode has been selected
+                                -- for the query.
                   deriving (Eq, Show)
 
 instance Enum ExecStatus where
@@ -983,6 +988,7 @@ instance Enum ExecStatus where
     toEnum (#const PGRES_BAD_RESPONSE)   = BadResponse
     toEnum (#const PGRES_NONFATAL_ERROR) = NonfatalError
     toEnum (#const PGRES_FATAL_ERROR)    = FatalError
+    toEnum (#const PGRES_SINGLE_TUPLE)   = SingleTuple
     toEnum _ = error "Database.PQ.Enum.ExecStatus.toEnum: bad argument"
 
     fromEnum EmptyQuery    = (#const PGRES_EMPTY_QUERY)
@@ -993,6 +999,7 @@ instance Enum ExecStatus where
     fromEnum BadResponse   = (#const PGRES_BAD_RESPONSE)
     fromEnum NonfatalError = (#const PGRES_NONFATAL_ERROR)
     fromEnum FatalError    = (#const PGRES_FATAL_ERROR)
+    fromEnum SingleTuple   = (#const PGRES_SINGLE_TUPLE)
 
 -- | Returns the result status of the command.
 resultStatus :: Result
@@ -1807,6 +1814,19 @@ isnonblocking :: Connection
 isnonblocking connection = enumFromConn connection c_PQisnonblocking
 
 
+-- | Select single-row mode for the currently-executing query.
+--
+-- This function can only be called immediately after PQsendQuery or one of its
+-- sibling functions, before any other operation on the connection such as
+-- PQconsumeInput or PQgetResult. If called at the correct time, the function
+-- activates single-row mode for the current query and returns 1. Otherwise the
+-- mode stays unchanged and the function returns 0. In any case, the mode
+-- reverts to normal after completion of the current query.
+setSingleRowMode :: Connection
+                 -> IO Bool
+setSingleRowMode connection = enumFromConn connection c_PQsetSingleRowMode
+
+
 data FlushStatus = FlushOk
                  | FlushFailed
                  | FlushWriting
@@ -2476,6 +2496,9 @@ foreign import ccall        "libpq-fe.h PQsetnonblocking"
 
 foreign import ccall unsafe "libpq-fe.h PQisnonblocking"
     c_PQisnonblocking :: Ptr PGconn -> IO CInt
+
+foreign import ccall unsafe "libpq-fe.h PQsetSingleRowMode"
+    c_PQsetSingleRowMode :: Ptr PGconn -> IO CInt
 
 foreign import ccall        "libpq-fe.h PQgetResult"
     c_PQgetResult :: Ptr PGconn -> IO (Ptr PGresult)
