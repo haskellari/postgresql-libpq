@@ -1,5 +1,5 @@
 Name:                postgresql-libpq
-Version:             0.9.1.1
+Version:             0.9.2.0
 Synopsis:            low-level binding to libpq
 
 Description:         This is a binding to libpq: the C application
