@@ -245,6 +245,8 @@ import Control.Concurrent.MVar
 
 import Data.Typeable
 
+import Database.PostgreSQL.LibPQ.Internal
+
 #if __GLASGOW_HASKELL__ >= 700
 import Control.Exception (mask_)
 #else
@@ -261,16 +263,6 @@ mask_ = Control.Exception.block
 -- 'connectStart'. The 'status' function should be called to check
 -- whether a connection was successfully made before queries are sent
 -- via the connection object.
-
--- | 'Connection' encapsulates a connection to the backend.
-data Connection = Conn {-# UNPACK #-} !(ForeignPtr PGconn)
-                       {-# UNPACK #-} !(MVar NoticeBuffer)
-
-instance Eq Connection where
-    (Conn c _) == (Conn d _) = c == d
-    (Conn c _) /= (Conn d _) = c /= d
-
-data PGconn
 
 -- | Makes a new connection to the database server.
 --
@@ -2021,12 +2013,6 @@ setErrorVerbosity connection verbosity =
     enumFromConn connection $ \p ->
         c_PQsetErrorVerbosity p $ fromIntegral $ fromEnum verbosity
 
-withConn :: Connection
-         -> (Ptr PGconn -> IO b)
-         -> IO b
-withConn (Conn !fp _) f = withForeignPtr fp f
-
-
 enumFromConn :: (Integral a, Enum b) => Connection
              -> (Ptr PGconn -> IO a)
              -> IO b
@@ -2105,9 +2091,6 @@ maybeBsFromForeignPtr fp f =
 --                      return $ B.fromForeignPtr fp' 0 l
 --     where
 --       finalizer = touchForeignPtr fp
-
-data CNoticeBuffer
-type NoticeBuffer = Ptr CNoticeBuffer
 
 type NoticeReceiver = NoticeBuffer -> Ptr PGresult -> IO ()
 

@@ -32,7 +32,7 @@ Library
   c-sources:           cbits/noticehandlers.c
   include-dirs:        cbits
   Exposed-modules:     Database.PostgreSQL.LibPQ
-
+                       Database.PostgreSQL.LibPQ.Internal
   Build-depends:       base >= 4 && < 5
                      , bytestring
 
@@ -54,4 +54,4 @@ source-repository head
 source-repository this
   type:     git
   location: http://github.com/lpsmith/postgresql-libpq
-  tag:      v0.9.1.1
+  tag:      v0.9.2.0
