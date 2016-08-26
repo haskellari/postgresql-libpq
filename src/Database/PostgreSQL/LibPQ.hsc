@@ -2113,10 +2113,13 @@ disableNoticeReporting conn@(Conn _ nbRef) = do
 --   later call 'disableNoticeReporting' after calling this function.
 enableNoticeReporting :: Connection -> IO ()
 enableNoticeReporting conn@(Conn _ nbRef) = do
-    nb' <- c_malloc_noticebuffer
-    _ <- withConn conn $ \c -> c_PQsetNoticeReceiver c p_store_notices nb'
-    nb  <- swapMVar nbRef nb'
-    c_free_noticebuffer nb
+  if isNullConnection conn
+    then return ()
+    else do
+      nb' <- c_malloc_noticebuffer
+      _ <- withConn conn $ \c -> c_PQsetNoticeReceiver c p_store_notices nb'
+      nb  <- swapMVar nbRef nb'
+      c_free_noticebuffer nb
 
 -- |  This function retrieves any notices received from the backend.
 --    Because multiple notices can be received at a time,  you will
