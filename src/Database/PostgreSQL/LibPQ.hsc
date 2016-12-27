@@ -961,6 +961,7 @@ data ExecStatus = EmptyQuery    -- ^ The string sent to the server was empty.
                                 -- transfer started.
                 | CopyIn        -- ^ Copy In (to server) data transfer
                                 -- started.
+                | CopyBoth      -- ^ Copy In/Out data transfer started.
                 | BadResponse   -- ^ The server's response was not understood.
                 | NonfatalError -- ^ A nonfatal error (a notice or
                                 -- warning) occurred.
@@ -977,6 +978,7 @@ instance Enum ExecStatus where
     toEnum (#const PGRES_TUPLES_OK)      = TuplesOk
     toEnum (#const PGRES_COPY_OUT)       = CopyOut
     toEnum (#const PGRES_COPY_IN)        = CopyIn
+    toEnum (#const PGRES_COPY_BOTH)      = CopyBoth
     toEnum (#const PGRES_BAD_RESPONSE)   = BadResponse
     toEnum (#const PGRES_NONFATAL_ERROR) = NonfatalError
     toEnum (#const PGRES_FATAL_ERROR)    = FatalError
@@ -988,6 +990,7 @@ instance Enum ExecStatus where
     fromEnum TuplesOk      = (#const PGRES_TUPLES_OK)
     fromEnum CopyOut       = (#const PGRES_COPY_OUT)
     fromEnum CopyIn        = (#const PGRES_COPY_IN)
+    fromEnum CopyBoth      = (#const PGRES_COPY_BOTH)
     fromEnum BadResponse   = (#const PGRES_BAD_RESPONSE)
     fromEnum NonfatalError = (#const PGRES_NONFATAL_ERROR)
     fromEnum FatalError    = (#const PGRES_FATAL_ERROR)
