@@ -1,4 +1,8 @@
-#!/usr/bin/env runhaskell
+{-# LANGUAGE CPP #-}
+
+#ifndef MIN_VERSION_Cabal
+#define MIN_VERSION_Cabal(x,y,z) 0
+#endif
 
 import Distribution.Simple
 import Distribution.Simple.Setup
@@ -12,9 +16,28 @@ import Distribution.Verbosity
 import Data.Char (isSpace)
 import Data.List (dropWhile,reverse)
 
+#if MIN_VERSION_Cabal(2,0,0)
+import Distribution.Types.UnqualComponentName
+#endif
+
+flag :: String -> FlagName
+#if MIN_VERSION_Cabal(2,0,0)
+flag = mkFlagName
+#else
+flag = FlagName
+#endif
+
+#if MIN_VERSION_Cabal(2,0,0)
+unqualComponentName :: String -> UnqualComponentName
+unqualComponentName = mkUnqualComponentName
+#else
+unqualComponentName :: String -> String
+unqualComponentName = id
+#endif
+
 main = defaultMainWithHooks simpleUserHooks {
   confHook = \pkg flags -> do
-    if lookup (FlagName "use-pkg-config") 
+    if lookup (flag "use-pkg-config")
               (configConfigurationsFlags flags) == Just True
     then do
       confHook simpleUserHooks pkg flags
@@ -24,7 +47,7 @@ main = defaultMainWithHooks simpleUserHooks {
 
       return lbi {
         localPkgDescr = updatePackageDescription
-                          (Just bi, [("runtests", bi)]) (localPkgDescr lbi)
+                          (Just bi, [(unqualComponentName "runtests", bi)]) (localPkgDescr lbi)
       }
 }
 
@@ -32,7 +55,7 @@ psqlBuildInfo :: LocalBuildInfo -> IO BuildInfo
 psqlBuildInfo lbi = do
   (pgconfigProg, _) <- requireProgram verbosity
                          (simpleProgram "pg_config") (withPrograms lbi)
-  let pgconfig = rawSystemProgramStdout verbosity pgconfigProg
+  let pgconfig = getProgramOutput verbosity pgconfigProg
 
   incDir <- pgconfig ["--includedir"]
   libDir <- pgconfig ["--libdir"]
