@@ -656,8 +656,7 @@ serverVersion connection =
 libPQVersion :: IO Int
 libPQVersion = do
 #ifndef mingw32_HOST_OS
-  dl <- dlopen "libpq.so" [RTLD_LAZY]
-  res <- try (dlsym dl "PQlibVersion") :: IO (Either IOException (FunPtr Int))
+  res <- try (dlsym Default "PQlibVersion") :: IO (Either IOException (FunPtr Int))
 #else
   dl <- loadLibrary "LIBPQ.DLL"
   res <- try (castPtrToFunPtr `fmap` getProcAddress dl "PQlibVersion") :: IO (Either IOException (FunPtr Int))
