@@ -658,7 +658,7 @@ libPQVersion = do
 #ifndef mingw32_HOST_OS
   res <- try (dlsym Default "PQlibVersion") :: IO (Either IOException (FunPtr Int))
 #else
-  dl <- loadLibrary "LIBPQ.DLL"
+  dl <- getModuleHandle $ Just "libpq"
   res <- try (castPtrToFunPtr `fmap` getProcAddress dl "PQlibVersion") :: IO (Either IOException (FunPtr Int))
 #endif
   case res of
