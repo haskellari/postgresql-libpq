@@ -9,7 +9,7 @@ Description:         This is a binding to libpq: the C application
                      backend server and to receive the results of
                      these queries.
 
-Homepage:            http://github.com/lpsmith/postgresql-libpq
+Homepage:            https://github.com/lpsmith/postgresql-libpq
 License:             BSD3
 License-file:        LICENSE
 Author:              Grant Monroe, Leon P Smith, Joey Adams
@@ -49,9 +49,9 @@ Library
 
 source-repository head
   type:     git
-  location: http://github.com/lpsmith/postgresql-libpq
+  location: https://github.com/lpsmith/postgresql-libpq
 
 source-repository this
   type:     git
-  location: http://github.com/lpsmith/postgresql-libpq
+  location: https://github.com/lpsmith/postgresql-libpq
   tag:      v0.9.3.1
