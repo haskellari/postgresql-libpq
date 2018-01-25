@@ -36,6 +36,13 @@ Library
   Build-depends:       base >= 4 && < 5
                      , bytestring
 
+  if !os(windows)
+    Build-depends:     unix
+
+  if os(windows)
+    Build-depends:     Win32
+
+
   GHC-Options:       -Wall
   if flag(use-pkg-config)
     Pkgconfig-depends:   libpq
