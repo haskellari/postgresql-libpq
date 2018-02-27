@@ -5,3 +5,5 @@ Database/PQ.hs
 dist
 .cabal-sandbox/
 cabal.sandbox.config
+dist-newstyle/
+.ghc.environment.*

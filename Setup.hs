@@ -35,10 +35,15 @@ unqualComponentName :: String -> String
 unqualComponentName = id
 #endif
 
+#if !MIN_VERSION_Cabal(2,2,0)
+unFlagAssignment :: [(FlagName, Bool)] -> [(FlagName, Bool)]
+unFlagAssignment = id
+#endif
+
 main = defaultMainWithHooks simpleUserHooks {
   confHook = \pkg flags -> do
     if lookup (flag "use-pkg-config")
-              (configConfigurationsFlags flags) == Just True
+              (unFlagAssignment (configConfigurationsFlags flags)) == Just True
     then do
       confHook simpleUserHooks pkg flags
     else do
