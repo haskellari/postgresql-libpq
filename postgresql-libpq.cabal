@@ -65,9 +65,17 @@ Library
   if flag(use-pkg-config)
     Pkgconfig-depends:   libpq >=9.3
   else
-    Extra-Libraries:     pq
-    if os(openbsd)
-      Extra-Libraries:     crypto ssl
+    if os(windows)
+      -- Due to https://sourceware.org/bugzilla/show_bug.cgi?id=22948,
+      -- if we specify pq instead of libpq, then ld might link against
+      -- libpq.dll directly, which can lead to segfaults. As a temporary hack,
+      -- we force ld to link against the libpq.lib import library directly
+      -- by specifying libpq here.
+      Extra-Libraries:   libpq
+    else
+      Extra-Libraries:     pq
+      if os(openbsd)
+        Extra-Libraries:     crypto ssl
 
   -- Other-modules:
   Build-tools:       hsc2hs
