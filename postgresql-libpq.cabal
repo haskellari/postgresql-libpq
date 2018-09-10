@@ -32,6 +32,9 @@ Tested-with:
   GHC==8.4.3,
   GHC==8.6.1
 
+extra-source-files:
+  CHANGELOG.md
+
 Custom-setup
   setup-depends:
     base >= 4.3 && <5, Cabal >= 1.10 && <2.5
