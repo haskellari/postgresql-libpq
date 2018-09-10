@@ -1,6 +1,5 @@
 Name:                postgresql-libpq
-Version:             0.9.4.0
-x-revision:          2
+Version:             0.9.4.1
 Synopsis:            low-level binding to libpq
 
 Description:         This is a binding to libpq: the C application
@@ -49,19 +48,19 @@ Library
   include-dirs:        cbits
   Exposed-modules:     Database.PostgreSQL.LibPQ
                        Database.PostgreSQL.LibPQ.Internal
-  Build-depends:       base >= 4.3 && < 5
-                     , bytestring
+  Build-depends:       base       >=4.3     && <4.13
+                     , bytestring >=0.9.1.0 && <0.11
 
   if !os(windows)
-    Build-depends:     unix
+    Build-depends:     unix  >=2.4.2.0 && <2.8
 
   if os(windows)
-    Build-depends:     Win32
-
+    Build-depends:     Win32 >=2.2.0.2 && <2.7
 
   GHC-Options:       -Wall
+
   if flag(use-pkg-config)
-    Pkgconfig-depends:   libpq
+    Pkgconfig-depends:   libpq >=9.3
   else
     Extra-Libraries:     pq
     if os(openbsd)
@@ -69,6 +68,15 @@ Library
 
   -- Other-modules:
   Build-tools:       hsc2hs
+
+test-suite smoke
+  type:           exitcode-stdio-1.0
+  main-is:        Smoke.hs
+  hs-source-dirs: test
+  build-depends:
+    base,
+    bytestring,
+    postgresql-libpq
 
 source-repository head
   type:     git
