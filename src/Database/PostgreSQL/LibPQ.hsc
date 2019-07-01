@@ -1203,9 +1203,9 @@ resultErrorField (Result fp) fieldcode =
 -- values, these functions will act as though the result has zero rows
 -- and zero columns.
 
--- | Returns the number of rows (tuples) in the query result. Because
--- it returns an integer result, large result sets might overflow the
--- return value on 32-bit operating systems.
+-- | Returns the number of rows (tuples) in the query result.  (Note
+-- that PGresult objects are limited to no more than INT_MAX rows, so
+-- an int result is sufficient.)
 ntuples :: Result
         -> IO Row
 ntuples res = withResult res (return . toRow . c_PQntuples)
