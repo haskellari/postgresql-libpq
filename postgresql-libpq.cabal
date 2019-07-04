@@ -42,8 +42,8 @@ Custom-setup
 -- If true,  use pkg-config,  otherwise use the pg_config based build
 -- configuration
 Flag use-pkg-config
-  default: False
-  manual:  True
+  default: True
+  manual: False
 
 Library
   hs-source-dirs:      src
