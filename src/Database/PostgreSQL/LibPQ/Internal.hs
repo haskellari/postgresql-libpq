@@ -11,12 +11,13 @@
 --
 -----------------------------------------------------------------------------
 
-{-# LANGUAGE BangPatterns, EmptyDataDecls #-}
+{-# LANGUAGE BangPatterns   #-}
+{-# LANGUAGE EmptyDataDecls #-}
 
 module Database.PostgreSQL.LibPQ.Internal where
 
+import Control.Concurrent.MVar (MVar)
 import Foreign
-import Control.Concurrent.MVar ( MVar )
 
 
 -- | 'Connection' encapsulates a connection to the backend.
