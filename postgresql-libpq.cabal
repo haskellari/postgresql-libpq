@@ -82,12 +82,12 @@ library
       extra-libraries: libpq
 
     else
-      extra-libraries: pq
-
-      if os(openbsd)
-        extra-libraries:
-          crypto
-          ssl
+      extra-libraries:
+        pq
+        pgport
+        pgcommon
+        ssl
+        crypto
 
   -- Other-modules:
   build-tools:     hsc2hs -any
