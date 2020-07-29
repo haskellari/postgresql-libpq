@@ -2510,7 +2510,7 @@ foreign import ccall        "libpq-fe.h PQcancel"
 foreign import ccall unsafe "libpq-fe.h PQnotifies"
     c_PQnotifies :: Ptr PGconn -> IO (Ptr Notify)
 
-foreign import ccall unsafe "libpq-fe.h PQconsumeInput"
+foreign import ccall        "libpq-fe.h PQconsumeInput"
     c_PQconsumeInput :: Ptr PGconn -> IO CInt
 
 foreign import ccall unsafe "libpq-fe.h PQisBusy"
