@@ -238,7 +238,6 @@ import qualified Data.ByteString.Unsafe as B
 import qualified Data.ByteString.Internal as B ( fromForeignPtr
                                                , c_strlen
                                                , createAndTrim
-                                               , ByteString(..)
                                                )
 import qualified Data.ByteString as B
 
@@ -246,6 +245,7 @@ import Control.Concurrent.MVar
 
 import Data.Typeable
 
+import Database.PostgreSQL.LibPQ.Compat
 import Database.PostgreSQL.LibPQ.Internal
 
 #if __GLASGOW_HASKELL__ >= 700
@@ -2170,7 +2170,7 @@ getNotice (Conn _ nbRef) =
         else do
           fp <- newForeignPtr finalizerFree (castPtr np)
           len  <- #{peek PGnotice, len} np
-          return $! Just $! B.PS fp (#offset PGnotice, str) len
+          return $! Just $! mkPS fp (#offset PGnotice, str) len
 
 -- $largeobjects
 

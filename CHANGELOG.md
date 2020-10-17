@@ -1,3 +1,9 @@
+0.9.4.3
+-------
+
+- Support `bytestring-0.11`
+- Make `PQconsumeInput` FFI call `safe`
+
 0.9.4.2
 -------
 
