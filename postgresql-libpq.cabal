@@ -22,7 +22,7 @@ copyright:
 category:           Database
 build-type:         Custom
 extra-source-files: cbits/noticehandlers.h
-cabal-version:      >=1.8
+cabal-version:      >=1.10
 tested-with:
   GHC ==7.0.4
    || ==7.2.2
@@ -51,14 +51,15 @@ flag use-pkg-config
   manual:  True
 
 library
-  hs-source-dirs:  src
-  c-sources:       cbits/noticehandlers.c
-  include-dirs:    cbits
+  default-language: Haskell2010
+  hs-source-dirs:   src
+  c-sources:        cbits/noticehandlers.c
+  include-dirs:     cbits
   exposed-modules:
     Database.PostgreSQL.LibPQ
     Database.PostgreSQL.LibPQ.Internal
 
-  other-modules:   Database.PostgreSQL.LibPQ.Compat
+  other-modules:    Database.PostgreSQL.LibPQ.Compat
   build-depends:
       base        >=4.3     && <4.15
     , bytestring  >=0.9.1.0 && <0.12
@@ -69,7 +70,7 @@ library
   if os(windows)
     build-depends: Win32 >=2.2.0.2 && <2.11
 
-  ghc-options:     -Wall
+  ghc-options:      -Wall
 
   if flag(use-pkg-config)
     pkgconfig-depends: libpq ==9.3 || >9.3
@@ -92,12 +93,13 @@ library
           ssl
 
   -- Other-modules:
-  build-tools:     hsc2hs -any
+  build-tools:      hsc2hs -any
 
 test-suite smoke
-  type:           exitcode-stdio-1.0
-  main-is:        Smoke.hs
-  hs-source-dirs: test
+  default-language: Haskell2010
+  type:             exitcode-stdio-1.0
+  main-is:          Smoke.hs
+  hs-source-dirs:   test
   build-depends:
       base
     , bytestring
