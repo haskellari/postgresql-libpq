@@ -9,7 +9,8 @@ description:
   backend server and to receive the results of
   these queries.
 
-homepage:           https://github.com/phadej/postgresql-libpq
+homepage:           https://github.com/haskellari/postgresql-libpq
+bug-reports:        https://github.com/haskellari/postgresql-libpq/issues
 license:            BSD3
 license-file:       LICENSE
 author:             Grant Monroe, Leon P Smith, Joey Adams
@@ -66,7 +67,7 @@ library
     build-depends: unix >=2.4.2.0 && <2.8
 
   if os(windows)
-    build-depends: Win32 >=2.2.0.2 && <2.7
+    build-depends: Win32 >=2.2.0.2 && <2.11
 
   ghc-options:     -Wall
 
@@ -104,9 +105,4 @@ test-suite smoke
 
 source-repository head
   type:     git
-  location: https://github.com/phadej/postgresql-libpq
-
-source-repository this
-  type:     git
-  location: https://github.com/phadej/postgresql-libpq
-  tag:      v0.9.4.0
+  location: https://github.com/haskellari/postgresql-libpq
