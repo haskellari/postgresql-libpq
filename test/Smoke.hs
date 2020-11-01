@@ -10,7 +10,12 @@ main = do
     env <- getEnvironment
     case lookup "DATABASE_CONNSTRING" env of
         Nothing -> putStrLn "Set DATABASE_CONNSTRING environment variable"
-        Just s  -> smoke (BS8.pack s)
+        Just s  -> smoke (BS8.pack (special s))
+  where
+    -- https://www.appveyor.com/docs/services-databases/
+    special "appveyor" = "dbname='TestDb' user='postgres' password='Password12!'"
+    special "travis"   = ""
+    special s          = s
 
 smoke :: BS8.ByteString -> IO ()
 smoke connstring = do
