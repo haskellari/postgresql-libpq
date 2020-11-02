@@ -70,3 +70,9 @@ test_script:
  - "cabal %CABOPTS% v2-build -j1 all"
  # - "cabal %CABOPTS% v2-test -j1 all"
  - "cabal %CABOPTS% v2-run smoke"
+
+ # Build from sdist
+ - "rmdir /Q /S dist-newstyle"
+ - "cabal v2-sdist"
+ - "sh -c 'echo packages: dist-newstyle/sdist/*.tar.gz > cabal.project'"
+ - "cabal v2-build -j1 postgresql-libpq" # TODO: unfortunately the package name have to be here
