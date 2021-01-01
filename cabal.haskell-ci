@@ -1,15 +1,5 @@
-branches: master
-postgresql: True
+branches:           master
+postgresql:         True
 
-env: 7.0.4:DATABASE_CONNSTRING=travis
-env: 7.2.2:DATABASE_CONNSTRING=travis
-env: 7.4.2:DATABASE_CONNSTRING=travis
-env: 7.6.3:DATABASE_CONNSTRING=travis
-env: 7.8.4:DATABASE_CONNSTRING=travis
-env: 7.10.3:DATABASE_CONNSTRING=travis
-env: 8.0.2:DATABASE_CONNSTRING=travis
-env: 8.2.2:DATABASE_CONNSTRING=travis
-env: 8.4.4:DATABASE_CONNSTRING=travis
-env: 8.6.5:DATABASE_CONNSTRING=travis
-env: 8.8.4:DATABASE_CONNSTRING=travis
-env: 8.10.2:DATABASE_CONNSTRING=travis
+-- due build-type: Custom
+test-output-direct: False
