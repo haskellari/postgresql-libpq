@@ -16,7 +16,9 @@ environment:
     DATABASE_CONNSTRING: appveyor
   matrix:
     # 64 bit builds
-    - GHCVER: "8.8.1"
+    - GHCVER: "8.10.4"
+      CHOCOPTS:
+    - GHCVER: "8.8.4"
       CHOCOPTS:
     - GHCVER: "8.6.5"
       CHOCOPTS:
