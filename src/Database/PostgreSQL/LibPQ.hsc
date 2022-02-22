@@ -242,6 +242,7 @@ import qualified Data.ByteString.Internal as B ( fromForeignPtr
 import qualified Data.ByteString as B
 
 import Control.Concurrent.MVar
+import Control.Monad (when)
 
 import Data.Typeable
 
@@ -295,8 +296,9 @@ connectdb conninfo =
            then fail "libpq failed to allocate a PGconn structure"
            else do
              noticeBuffer <- newMVar nullPtr
-             connection <- newForeignPtrOnce connPtr (pqfinish connPtr noticeBuffer)
-             return $! Conn connection noticeBuffer
+             finishedVar <- newEmptyMVar
+             connection <- newForeignPtrOnce connPtr (pqfinish connPtr noticeBuffer finishedVar)
+             return $! Conn connection noticeBuffer finishedVar
 
 -- | Make a connection to the database server in a nonblocking manner.
 connectStart :: B.ByteString -- ^ Connection Info
@@ -308,11 +310,12 @@ connectStart connStr =
            then fail "libpq failed to allocate a PGconn structure"
            else do
              noticeBuffer <- newMVar nullPtr
-             connection <- newForeignPtrOnce connPtr (pqfinish connPtr noticeBuffer)
-             return $! Conn connection noticeBuffer
+             finishedVar <- newEmptyMVar
+             connection <- newForeignPtrOnce connPtr (pqfinish connPtr noticeBuffer finishedVar)
+             return $! Conn connection noticeBuffer finishedVar
 
-pqfinish :: Ptr PGconn -> MVar NoticeBuffer -> IO ()
-pqfinish conn noticeBuffer = do
+pqfinish :: Ptr PGconn -> MVar NoticeBuffer -> MVar () -> IO ()
+pqfinish conn noticeBuffer finishedVar = do
 #if __GLASGOW_HASKELL__ >= 700
 --   This covers the case when a connection is closed while other Haskell
 --   threads are using GHC's IO manager to wait on the descriptor.  This is
@@ -331,6 +334,8 @@ pqfinish conn noticeBuffer = do
 #endif
    nb <- swapMVar noticeBuffer nullPtr
    c_free_noticebuffer nb
+   didPut <- tryPutMVar finishedVar () -- See comment in `finish`.
+   when (not didPut) $ error "pqfinish: tryPutMVar failed unexpectedly; the connection must have been closed repeatedly"
 
 -- | Workaround for bug in 'FC.newForeignPtr' before base 4.6.  Ensure the
 -- finalizer is only run once, to prevent a segfault.  See GHC ticket #7170
@@ -348,14 +353,15 @@ newNullConnection :: IO Connection
 newNullConnection = do
   connection   <- newForeignPtr_ nullPtr
   noticeBuffer <- newMVar nullPtr
-  return $! Conn connection noticeBuffer
+  finishedVar <- newEmptyMVar
+  return $! Conn connection noticeBuffer finishedVar
 
 -- | Test if a connection is the Null Connection.
 isNullConnection :: Connection -> Bool
 #if __GLASGOW_HASKELL__ >= 702
-isNullConnection (Conn x _) = Unsafe.unsafeForeignPtrToPtr x == nullPtr
+isNullConnection (Conn x _ _) = Unsafe.unsafeForeignPtrToPtr x == nullPtr
 #else
-isNullConnection (Conn x _) = unsafeForeignPtrToPtr x == nullPtr
+isNullConnection (Conn x _ _) = unsafeForeignPtrToPtr x == nullPtr
 #endif
 {-# INLINE isNullConnection #-}
 
@@ -463,10 +469,24 @@ pollHelper poller connection =
 --
 -- Note that the 'Connection' must not be used again after 'finish'
 -- has been called.
+--
+-- When this function returns, is is guaranteed that @PQfinish()@
+-- was called and the connection is closed.
 finish :: Connection
        -> IO ()
-finish (Conn fp _) =
+finish (Conn fp _ finishedVar) =
     do finalizeForeignPtr fp
+       -- This MVar is necessary because we unfortunately use `newForeignPtr`
+       -- from `Foreign.Concurrent` which says:
+       --     The storage manager will start the finalizer, in a separate thread,
+       --     some time after the last reference to the ForeignPtr is dropped.
+       --     There is no guarantee of promptness, and in fact there is no guarantee
+       --     that the finalizer will eventually run at all.
+       -- Without the finalizer putting this MVar in `pqfinish`,
+       -- and us waiting for us here, the `finish` function would really only be
+       -- a "scheduleForFinishing", and the caller would have no guarantee
+       -- that the connection is actually closed.
+       takeMVar finishedVar
 
 
 -- $connstatus
@@ -2137,7 +2157,7 @@ data PGnotice
 --   are distinct from notifications.  This function suppresses notices.
 --   You may later call 'enableNoticeReporting' after calling this function.
 disableNoticeReporting :: Connection -> IO ()
-disableNoticeReporting conn@(Conn _ nbRef) = do
+disableNoticeReporting conn@(Conn _ nbRef _) = do
     _ <- withConn conn $ \c -> c_PQsetNoticeReceiver c p_discard_notices nullPtr
     nb <- swapMVar nbRef nullPtr
     c_free_noticebuffer nb
@@ -2148,7 +2168,7 @@ disableNoticeReporting conn@(Conn _ nbRef) = do
 --   programmatically retreived using the 'getNotice' function.   You may
 --   later call 'disableNoticeReporting' after calling this function.
 enableNoticeReporting :: Connection -> IO ()
-enableNoticeReporting conn@(Conn _ nbRef) = do
+enableNoticeReporting conn@(Conn _ nbRef _) = do
   if isNullConnection conn
     then return ()
     else do
@@ -2162,7 +2182,7 @@ enableNoticeReporting conn@(Conn _ nbRef) = do
 --    typically want to call this function in a loop until you get
 --    back a 'Nothing'.
 getNotice :: Connection -> IO (Maybe B.ByteString)
-getNotice (Conn _ nbRef) =
+getNotice (Conn _ nbRef _) =
     withMVar nbRef $ \nb -> do
       np <- c_get_notice nb
       if np == nullPtr

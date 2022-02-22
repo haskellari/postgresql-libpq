@@ -23,15 +23,16 @@ import Foreign
 -- | 'Connection' encapsulates a connection to the backend.
 data Connection = Conn {-# UNPACK #-} !(ForeignPtr PGconn)
                        {-# UNPACK #-} !(MVar NoticeBuffer)
+                       {-# UNPACK #-} !(MVar ()) -- ^ This MVar is filled finishonly once the connection is fully closed (@PQfinish()@ completed on it). See comment in `Database.PostgreSQL.LibPQ.finish`.
 
 instance Eq Connection where
-    (Conn c _) == (Conn d _) = c == d
-    (Conn c _) /= (Conn d _) = c /= d
+    (Conn c _ _) == (Conn d _ _) = c == d
+    (Conn c _ _) /= (Conn d _ _) = c /= d
 
 withConn :: Connection
          -> (Ptr PGconn -> IO b)
          -> IO b
-withConn (Conn !fp _) f = withForeignPtr fp f
+withConn (Conn !fp _ _) f = withForeignPtr fp f
 {-# INLINE withConn #-}
 
 data PGconn
