@@ -756,12 +756,11 @@ withParams params action =
         withMany (maybeWith B.useAsCString) values $ \c_values ->
             withArray c_values $ \vs ->
                 withArray c_lengths $ \ls ->
-                    withArray formats $ \fs ->
-                        action n ts vs ls fs
+                    withArrayLen formats $ \n fs ->
+                        action (toEnum n) ts vs ls fs
   where
     (oids, values, c_lengths, formats) =
         foldl' accum ([],[],[],[]) $ reverse params
-    !n = toEnum $ length params
 
     accum (!a,!b,!c,!d) Nothing = ( invalidOid:a
                                   , Nothing:b
@@ -783,11 +782,10 @@ withParamsPrepared params action =
     withMany (maybeWith B.useAsCString) values $ \c_values ->
         withArray c_values $ \vs ->
             withArray c_lengths $ \ls ->
-                withArray formats $ \fs ->
-                    action n vs ls fs
+                withArrayLen formats $ \n fs ->
+                    action (toEnum n) vs ls fs
   where
     (values, c_lengths, formats) = foldl' accum ([],[],[]) $ reverse params
-    !n = toEnum $ length params
 
     accum (!a,!b,!c) Nothing       = ( Nothing:a
                                      , 0:b
