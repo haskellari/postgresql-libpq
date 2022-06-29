@@ -754,14 +754,11 @@ withParams params action =
         withMany (maybeWith B.useAsCString) values $ \c_values ->
             withArray c_values $ \vs ->
                 withArray c_lengths $ \ls ->
-                    withArray formats $ \fs ->
-                        action n ts vs ls fs
+                    withArrayLen formats $ \n fs ->
+                        action (intToCInt n) ts vs ls fs
   where
     AccumParams oids values c_lengths formats =
         foldr accum (AccumParams [] [] [] []) params
-
-    n :: CInt
-    !n = intToCInt $ length params
 
     accum :: Maybe (Oid, B.ByteString, Format) -> AccumParams -> AccumParams
     accum Nothing ~(AccumParams a b c d) =
@@ -790,14 +787,11 @@ withParamsPrepared params action =
     withMany (maybeWith B.useAsCString) values $ \c_values ->
         withArray c_values $ \vs ->
             withArray c_lengths $ \ls ->
-                withArray formats $ \fs ->
-                    action n vs ls fs
+                withArrayLen formats $ \n fs ->
+                    action (intToCInt n) vs ls fs
   where
     AccumPrepParams values c_lengths formats =
         foldr accum (AccumPrepParams [] [] []) params
-
-    n :: CInt
-    n = intToCInt $ length params
 
     accum :: Maybe (B.ByteString ,Format) -> AccumPrepParams -> AccumPrepParams
     accum Nothing ~(AccumPrepParams a b c) =
