@@ -747,13 +747,26 @@ invalidOid :: Oid
 invalidOid = Oid (#const InvalidOid)
 
 
+-- | Prepare the given parameter bytestring for passing on to libpq,
+-- without copying for binary parameters.
+--
+-- This safe to use to pass parameters to libpq considering:
+-- * libpq treats the parameter data as read-only
+-- * 'ByteString' uses pinned memory
+-- * the reference to the 'CString' doesn't escape
+unsafeUseParamAsCString :: (B.ByteString, Format) -> (CString -> IO a) -> IO a
+unsafeUseParamAsCString (bs, format) =
+    case format of
+        Binary -> B.unsafeUseAsCString bs
+        Text   -> B.useAsCString bs
+
 -- | Convert a list of parameters to the format expected by libpq FFI calls.
 withParams :: [Maybe (Oid, B.ByteString, Format)]
            -> (CInt -> Ptr Oid -> Ptr CString -> Ptr CInt -> Ptr CInt -> IO a)
            -> IO a
 withParams params action =
     withArray oids $ \ts ->
-        withMany (maybeWith B.useAsCString) values $ \c_values ->
+        withMany (maybeWith unsafeUseParamAsCString) values $ \c_values ->
             withArray c_values $ \vs ->
                 withArray c_lengths $ \ls ->
                     withArrayLen formats $ \n fs ->
@@ -768,7 +781,7 @@ withParams params action =
                                   , 0:d
                                   )
     accum (!a,!b,!c,!d) (Just (t,v,f)) = ( t:a
-                                         , (Just v):b
+                                         , (Just (v,f)):b
                                          , (toEnum $ B.length v):c
                                          , (toEnum $ fromEnum f):d
                                          )
@@ -779,7 +792,7 @@ withParamsPrepared :: [Maybe (B.ByteString, Format)]
                    -> (CInt -> Ptr CString -> Ptr CInt -> Ptr CInt -> IO a)
                    -> IO a
 withParamsPrepared params action =
-    withMany (maybeWith B.useAsCString) values $ \c_values ->
+    withMany (maybeWith unsafeUseParamAsCString) values $ \c_values ->
         withArray c_values $ \vs ->
             withArray c_lengths $ \ls ->
                 withArrayLen formats $ \n fs ->
@@ -791,7 +804,7 @@ withParamsPrepared params action =
                                      , 0:b
                                      , 0:c
                                      )
-    accum (!a,!b,!c) (Just (v, f)) = ( (Just v):a
+    accum (!a,!b,!c) (Just (v, f)) = ( (Just (v,f)):a
                                      , (toEnum $ B.length v):b
                                      , (toEnum $ fromEnum f):c
                                      )
