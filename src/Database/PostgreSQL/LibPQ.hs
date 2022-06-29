@@ -654,13 +654,26 @@ connectionUsedPassword connection =
 -- 'Result'.
 newtype Result = Result (ForeignPtr PGresult) deriving (Eq, Show)
 
+-- | Prepare the given parameter bytestring for passing on to libpq,
+-- without copying for binary parameters.
+--
+-- This is safe to use to pass parameters to libpq considering:
+-- * libpq treats the parameter data as read-only
+-- * 'ByteString' uses pinned memory
+-- * the reference to the 'CString' doesn't escape
+unsafeUseParamAsCString :: (B.ByteString, Format) -> (CString -> IO a) -> IO a
+unsafeUseParamAsCString (bs, format) =
+    case format of
+        Binary -> B.unsafeUseAsCString bs
+        Text   -> B.useAsCString bs
+
 -- | Convert a list of parameters to the format expected by libpq FFI calls.
 withParams :: [Maybe (Oid, B.ByteString, Format)]
            -> (CInt -> Ptr Oid -> Ptr CString -> Ptr CInt -> Ptr CInt -> IO a)
            -> IO a
 withParams params action =
     unsafeWithArray n oids $ \ts ->
-        withMany (maybeWith B.useAsCString) values $ \c_values ->
+        withMany (maybeWith unsafeUseParamAsCString) values $ \c_values ->
             unsafeWithArray n c_values $ \vs ->
                 unsafeWithArray n c_lengths $ \ls ->
                     unsafeWithArray n formats $ \fs ->
@@ -676,12 +689,12 @@ withParams params action =
     accum (Just (t,v,f)) ~(AccumParams i xs ys zs ws)  =
         let !z = intToCInt (B.length v)
             !w = toCInt f
-        in AccumParams (i + 1) (t : xs) (Just v : ys) (z : zs) (w : ws)
+        in AccumParams (i + 1) (t : xs) (Just (v, f) : ys) (z : zs) (w : ws)
 
 intToCInt :: Int -> CInt
 intToCInt = toEnum
 
-data AccumParams = AccumParams !Int ![Oid] ![Maybe B.ByteString] ![CInt] ![CInt]
+data AccumParams = AccumParams !Int ![Oid] ![Maybe (B.ByteString, Format)] ![CInt] ![CInt]
 
 -- | Convert a list of parameters to the format expected by libpq FFI calls,
 -- prepared statement variant.
@@ -689,7 +702,7 @@ withParamsPrepared :: [Maybe (B.ByteString, Format)]
                    -> (CInt -> Ptr CString -> Ptr CInt -> Ptr CInt -> IO a)
                    -> IO a
 withParamsPrepared params action =
-    withMany (maybeWith B.useAsCString) values $ \c_values ->
+    withMany (maybeWith unsafeUseParamAsCString) values $ \c_values ->
         unsafeWithArray n c_values $ \vs ->
             unsafeWithArray n c_lengths $ \ls ->
                 unsafeWithArray n formats $ \fs ->
@@ -698,16 +711,16 @@ withParamsPrepared params action =
     AccumPrepParams n values c_lengths formats =
         foldr accum (AccumPrepParams 0 [] [] []) params
 
-    accum :: Maybe (B.ByteString ,Format) -> AccumPrepParams -> AccumPrepParams
+    accum :: Maybe (B.ByteString, Format) -> AccumPrepParams -> AccumPrepParams
     accum Nothing ~(AccumPrepParams i a b c) =
         AccumPrepParams (i + 1) (Nothing : a) (0 : b) (0 : c)
 
     accum (Just (v, f)) ~(AccumPrepParams i xs ys zs) =
         let !y = intToCInt (B.length v)
             !z = toCInt f
-        in AccumPrepParams (i + 1) (Just v : xs) (y : ys) (z : zs)
+        in AccumPrepParams (i + 1) (Just (v, f) : xs) (y : ys) (z : zs)
 
-data AccumPrepParams = AccumPrepParams !Int ![Maybe B.ByteString] ![CInt] ![CInt]
+data AccumPrepParams = AccumPrepParams !Int ![Maybe (B.ByteString, Format)] ![CInt] ![CInt]
 
 -- | Submits a command to the server and waits for the result.
 --
