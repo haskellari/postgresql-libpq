@@ -759,9 +759,8 @@ withParams params action =
                     withArray formats $ \fs ->
                         action n ts vs ls fs
   where
-    (oids, values, lengths, formats) =
+    (oids, values, c_lengths, formats) =
         foldl' accum ([],[],[],[]) $ reverse params
-    !c_lengths = map toEnum lengths :: [CInt]
     !n = toEnum $ length params
 
     accum (!a,!b,!c,!d) Nothing = ( invalidOid:a
@@ -771,7 +770,7 @@ withParams params action =
                                   )
     accum (!a,!b,!c,!d) (Just (t,v,f)) = ( t:a
                                          , (Just v):b
-                                         , (B.length v):c
+                                         , (toEnum $ B.length v):c
                                          , (toEnum $ fromEnum f):d
                                          )
 
@@ -787,8 +786,7 @@ withParamsPrepared params action =
                 withArray formats $ \fs ->
                     action n vs ls fs
   where
-    (values, lengths, formats) = foldl' accum ([],[],[]) $ reverse params
-    !c_lengths = map toEnum lengths :: [CInt]
+    (values, c_lengths, formats) = foldl' accum ([],[],[]) $ reverse params
     !n = toEnum $ length params
 
     accum (!a,!b,!c) Nothing       = ( Nothing:a
@@ -796,7 +794,7 @@ withParamsPrepared params action =
                                      , 0:c
                                      )
     accum (!a,!b,!c) (Just (v, f)) = ( (Just v):a
-                                     , (B.length v):b
+                                     , (toEnum $ B.length v):b
                                      , (toEnum $ fromEnum f):c
                                      )
 
