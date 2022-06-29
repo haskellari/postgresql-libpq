@@ -746,6 +746,61 @@ newtype Oid = Oid CUInt deriving (Eq, Ord, Read, Show, Storable, Typeable)
 invalidOid :: Oid
 invalidOid = Oid (#const InvalidOid)
 
+
+-- | Convert a list of parameters to the format expected by libpq FFI calls.
+withParams :: [Maybe (Oid, B.ByteString, Format)]
+           -> (CInt -> Ptr Oid -> Ptr CString -> Ptr CInt -> Ptr CInt -> IO a)
+           -> IO a
+withParams params action =
+    withArray oids $ \ts ->
+        withMany (maybeWith B.useAsCString) values $ \c_values ->
+            withArray c_values $ \vs ->
+                withArray c_lengths $ \ls ->
+                    withArray formats $ \fs ->
+                        action n ts vs ls fs
+  where
+    (oids, values, lengths, formats) =
+        foldl' accum ([],[],[],[]) $ reverse params
+    !c_lengths = map toEnum lengths :: [CInt]
+    !n = toEnum $ length params
+
+    accum (!a,!b,!c,!d) Nothing = ( invalidOid:a
+                                  , Nothing:b
+                                  , 0:c
+                                  , 0:d
+                                  )
+    accum (!a,!b,!c,!d) (Just (t,v,f)) = ( t:a
+                                         , (Just v):b
+                                         , (B.length v):c
+                                         , (toEnum $ fromEnum f):d
+                                         )
+
+-- | Convert a list of parameters to the format expected by libpq FFI calls,
+-- prepared statement variant.
+withParamsPrepared :: [Maybe (B.ByteString, Format)]
+                   -> (CInt -> Ptr CString -> Ptr CInt -> Ptr CInt -> IO a)
+                   -> IO a
+withParamsPrepared params action =
+    withMany (maybeWith B.useAsCString) values $ \c_values ->
+        withArray c_values $ \vs ->
+            withArray c_lengths $ \ls ->
+                withArray formats $ \fs ->
+                    action n vs ls fs
+  where
+    (values, lengths, formats) = foldl' accum ([],[],[]) $ reverse params
+    !c_lengths = map toEnum lengths :: [CInt]
+    !n = toEnum $ length params
+
+    accum (!a,!b,!c) Nothing       = ( Nothing:a
+                                     , 0:b
+                                     , 0:c
+                                     )
+    accum (!a,!b,!c) (Just (v, f)) = ( (Just v):a
+                                     , (B.length v):b
+                                     , (toEnum $ fromEnum f):c
+                                     )
+
+
 -- | Submits a command to the server and waits for the result.
 --
 -- Returns a 'Result' or possibly 'Nothing'. A 'Result' will generally
@@ -812,31 +867,12 @@ execParams :: Connection                          -- ^ connection
            -> Format                              -- ^ result format
            -> IO (Maybe Result)                   -- ^ result
 execParams connection statement params rFmt =
-    do let (oids, values, lengths, formats) =
-               foldl' accum ([],[],[],[]) $ reverse params
-           !c_lengths = map toEnum lengths :: [CInt]
-           !n = toEnum $ length params
-           !f = toEnum $ fromEnum rFmt
-       resultFromConn connection $ \c ->
-           B.useAsCString statement $ \s ->
-               withArray oids $ \ts ->
-                   withMany (maybeWith B.useAsCString) values $ \c_values ->
-                       withArray c_values $ \vs ->
-                           withArray c_lengths $ \ls ->
-                               withArray formats $ \fs ->
-                                   c_PQexecParams c s n ts vs ls fs f
-
-    where
-      accum (!a,!b,!c,!d) Nothing = ( invalidOid:a
-                                    , Nothing:b
-                                    , 0:c
-                                    , 0:d
-                                    )
-      accum (!a,!b,!c,!d) (Just (t,v,f)) = ( t:a
-                                           , (Just v):b
-                                           , (B.length v):c
-                                           , (toEnum $ fromEnum f):d
-                                           )
+    resultFromConn connection $ \c ->
+        B.useAsCString statement $ \s ->
+            withParams params $ \n ts vs ls fs ->
+                c_PQexecParams c s n ts vs ls fs f
+  where
+    !f = toEnum $ fromEnum rFmt
 
 
 -- | Submits a request to create a prepared statement with the given
@@ -911,28 +947,13 @@ execPrepared :: Connection                     -- ^ connection
              -> [Maybe (B.ByteString, Format)] -- ^ parameters
              -> Format                         -- ^ result format
              -> IO (Maybe Result)              -- ^ result
-execPrepared connection stmtName mPairs rFmt =
-    do let (values, lengths, formats) = foldl' accum ([],[],[]) $ reverse mPairs
-           !c_lengths = map toEnum lengths :: [CInt]
-           !n = toEnum $ length mPairs
-           !f = toEnum $ fromEnum rFmt
-       resultFromConn connection $ \c ->
-           B.useAsCString stmtName $ \s ->
-               withMany (maybeWith B.useAsCString) values $ \c_values ->
-                   withArray c_values $ \vs ->
-                       withArray c_lengths $ \ls ->
-                           withArray formats $ \fs ->
-                               c_PQexecPrepared c s n vs ls fs f
-
+execPrepared connection stmtName params rFmt =
+    resultFromConn connection $ \c ->
+        B.useAsCString stmtName $ \s ->
+            withParamsPrepared params $ \n vs ls fs ->
+                c_PQexecPrepared c s n vs ls fs f
     where
-      accum (!a,!b,!c) Nothing       = ( Nothing:a
-                                       , 0:b
-                                       , 0:c
-                                       )
-      accum (!a,!b,!c) (Just (v, f)) = ( (Just v):a
-                                       , (B.length v):b
-                                       , (toEnum $ fromEnum f):c
-                                       )
+      !f = toEnum $ fromEnum rFmt
 
 
 -- | Submits a request to obtain information about the specified
@@ -1676,31 +1697,13 @@ sendQueryParams :: Connection
                 -> Format
                 -> IO Bool
 sendQueryParams connection statement params rFmt =
-    do let (oids, values, lengths, formats) =
-               foldl' accum ([],[],[],[]) $ reverse params
-           !c_lengths = map toEnum lengths :: [CInt]
-           !n = toEnum $ length params
-           !f = toEnum $ fromEnum rFmt
-       enumFromConn connection $ \c ->
-           B.useAsCString statement $ \s ->
-               withArray oids $ \ts ->
-                   withMany (maybeWith B.useAsCString) values $ \c_values ->
-                       withArray c_values $ \vs ->
-                           withArray c_lengths $ \ls ->
-                               withArray formats $ \fs ->
-                                   c_PQsendQueryParams c s n ts vs ls fs f
+    enumFromConn connection $ \c ->
+        B.useAsCString statement $ \s ->
+            withParams params $ \n ts vs ls fs ->
+                c_PQsendQueryParams c s n ts vs ls fs f
 
     where
-      accum (!a,!b,!c,!d) Nothing = ( invalidOid:a
-                                    , Nothing:b
-                                    , 0:c
-                                    , 0:d
-                                    )
-      accum (!a,!b,!c,!d) (Just (t,v,f)) = ( t:a
-                                           , (Just v):b
-                                           , (B.length v):c
-                                           , (toEnum $ fromEnum f):d
-                                           )
+      !f = toEnum $ fromEnum rFmt
 
 
 -- | Sends a request to create a prepared statement with the given
@@ -1726,28 +1729,14 @@ sendQueryPrepared :: Connection
                   -> [Maybe (B.ByteString, Format)]
                   -> Format
                   -> IO Bool
-sendQueryPrepared connection stmtName mPairs rFmt =
-    do let (values, lengths, formats) = foldl' accum ([],[],[]) $ reverse mPairs
-           !c_lengths = map toEnum lengths :: [CInt]
-           !n = toEnum $ length mPairs
-           !f = toEnum $ fromEnum rFmt
-       enumFromConn connection $ \c ->
-           B.useAsCString stmtName $ \s ->
-               withMany (maybeWith B.useAsCString) values $ \c_values ->
-                   withArray c_values $ \vs ->
-                       withArray c_lengths $ \ls ->
-                           withArray formats $ \fs ->
-                               c_PQsendQueryPrepared c s n vs ls fs f
+sendQueryPrepared connection stmtName params rFmt =
+    enumFromConn connection $ \c ->
+        B.useAsCString stmtName $ \s ->
+            withParamsPrepared params $ \n vs ls fs ->
+                c_PQsendQueryPrepared c s n vs ls fs f
 
     where
-      accum (!a,!b,!c) Nothing       = ( Nothing:a
-                                       , 0:b
-                                       , 0:c
-                                       )
-      accum (!a,!b,!c) (Just (v, f)) = ( (Just v):a
-                                       , (B.length v):b
-                                       , (toEnum $ fromEnum f):c
-                                       )
+      !f = toEnum $ fromEnum rFmt
 
 
 -- | Submits a request to obtain information about the specified
