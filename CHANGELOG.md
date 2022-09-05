@@ -1,3 +1,5 @@
+- Avoid copies when passing binary parameters
+
 0.9.4.3
 -------
 
