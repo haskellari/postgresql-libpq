@@ -14,7 +14,13 @@
 {-# LANGUAGE BangPatterns   #-}
 {-# LANGUAGE EmptyDataDecls #-}
 
-module Database.PostgreSQL.LibPQ.Internal where
+module Database.PostgreSQL.LibPQ.Internal (
+    Connection (..),
+    withConn,
+    PGconn,
+    CNoticeBuffer,
+    NoticeBuffer,
+) where
 
 import Control.Concurrent.MVar (MVar)
 import Foreign

@@ -67,6 +67,8 @@ library
     Database.PostgreSQL.LibPQ.Compat
     Database.PostgreSQL.LibPQ.Enums
     Database.PostgreSQL.LibPQ.Marshal
+    Database.PostgreSQL.LibPQ.Notify
+    Database.PostgreSQL.LibPQ.Oid
 
   build-depends:
       base        >=4.3     && <4.18
