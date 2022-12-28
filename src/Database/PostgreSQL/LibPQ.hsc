@@ -246,6 +246,7 @@ import Data.Typeable
 
 import Database.PostgreSQL.LibPQ.Compat
 import Database.PostgreSQL.LibPQ.Internal
+import Database.PostgreSQL.LibPQ.Marshal
 
 #if __GLASGOW_HASKELL__ >= 700
 import Control.Exception (mask_)
@@ -750,27 +751,24 @@ withParams :: [Maybe (Oid, B.ByteString, Format)]
            -> (CInt -> Ptr Oid -> Ptr CString -> Ptr CInt -> Ptr CInt -> IO a)
            -> IO a
 withParams params action =
-    withArray oids $ \ts ->
+    unsafeWithArray n oids $ \ts ->
         withMany (maybeWith B.useAsCString) values $ \c_values ->
-            withArray c_values $ \vs ->
-                withArray c_lengths $ \ls ->
-                    withArray formats $ \fs ->
-                        action n ts vs ls fs
+            unsafeWithArray n c_values $ \vs ->
+                unsafeWithArray n c_lengths $ \ls ->
+                    unsafeWithArray n formats $ \fs ->
+                        action (intToCInt n) ts vs ls fs
   where
-    AccumParams oids values c_lengths formats =
-        foldr accum (AccumParams [] [] [] []) params
-
-    n :: CInt
-    !n = intToCInt $ length params
+    AccumParams n oids values c_lengths formats =
+        foldr accum (AccumParams 0 [] [] [] []) params
 
     accum :: Maybe (Oid, B.ByteString, Format) -> AccumParams -> AccumParams
-    accum Nothing ~(AccumParams a b c d) =
-        AccumParams (invalidOid : a) (Nothing : b) (0 : c) (0 : d)
+    accum Nothing ~(AccumParams i a b c d) =
+        AccumParams (i + 1) (invalidOid : a) (Nothing : b) (0 : c) (0 : d)
 
-    accum (Just (t,v,f)) ~(AccumParams xs ys zs ws)  =
-        let z = intToCInt (B.length v)
-            w = formatToCInt f
-        in z `seq` w `seq` AccumParams (t : xs) (Just v : ys) (z : zs) (w : ws)
+    accum (Just (t,v,f)) ~(AccumParams i xs ys zs ws)  =
+        let !z = intToCInt (B.length v)
+            !w = formatToCInt f
+        in AccumParams (i + 1) (t : xs) (Just v : ys) (z : zs) (w : ws)
 
 formatToCInt :: Format -> CInt
 formatToCInt Text   = 0
@@ -779,7 +777,7 @@ formatToCInt Binary = 1
 intToCInt :: Int -> CInt
 intToCInt = toEnum
 
-data AccumParams = AccumParams ![Oid] ![Maybe B.ByteString] ![CInt] ![CInt]
+data AccumParams = AccumParams !Int ![Oid] ![Maybe B.ByteString] ![CInt] ![CInt]
 
 -- | Convert a list of parameters to the format expected by libpq FFI calls,
 -- prepared statement variant.
@@ -788,27 +786,24 @@ withParamsPrepared :: [Maybe (B.ByteString, Format)]
                    -> IO a
 withParamsPrepared params action =
     withMany (maybeWith B.useAsCString) values $ \c_values ->
-        withArray c_values $ \vs ->
-            withArray c_lengths $ \ls ->
-                withArray formats $ \fs ->
-                    action n vs ls fs
+        unsafeWithArray n c_values $ \vs ->
+            unsafeWithArray n c_lengths $ \ls ->
+                unsafeWithArray n formats $ \fs ->
+                    action (intToCInt n) vs ls fs
   where
-    AccumPrepParams values c_lengths formats =
-        foldr accum (AccumPrepParams [] [] []) params
-
-    n :: CInt
-    n = intToCInt $ length params
+    AccumPrepParams n values c_lengths formats =
+        foldr accum (AccumPrepParams 0 [] [] []) params
 
     accum :: Maybe (B.ByteString ,Format) -> AccumPrepParams -> AccumPrepParams
-    accum Nothing ~(AccumPrepParams a b c) =
-        AccumPrepParams (Nothing : a) (0 : b) (0 : c)
+    accum Nothing ~(AccumPrepParams i a b c) =
+        AccumPrepParams (i + 1) (Nothing : a) (0 : b) (0 : c)
 
-    accum (Just (v, f)) ~(AccumPrepParams xs ys zs) =
-        let y = intToCInt (B.length v)
-            z = formatToCInt f
-        in y `seq` z `seq` AccumPrepParams (Just v : xs) (y : ys) (z : zs)
+    accum (Just (v, f)) ~(AccumPrepParams i xs ys zs) =
+        let !y = intToCInt (B.length v)
+            !z = formatToCInt f
+        in AccumPrepParams (i + 1) (Just v : xs) (y : ys) (z : zs)
 
-data AccumPrepParams = AccumPrepParams ![Maybe B.ByteString] ![CInt] ![CInt]
+data AccumPrepParams = AccumPrepParams !Int ![Maybe B.ByteString] ![CInt] ![CInt]
 
 -- | Submits a command to the server and waits for the result.
 --
@@ -929,9 +924,8 @@ prepare connection stmtName query mParamTypes =
     resultFromConn connection $ \c ->
         B.useAsCString stmtName $ \s ->
             B.useAsCString query $ \q ->
-                maybeWith withArray mParamTypes $ \o ->
-                    let l = maybe 0 (intToCInt . length) mParamTypes
-                    in c_PQprepare c s q l o
+                maybeWithInt withArrayLen mParamTypes $ \l o ->
+                    c_PQprepare c s q (intToCInt l) o
 
 
 -- | Sends a request to execute a prepared statement with given
@@ -1726,9 +1720,8 @@ sendPrepare connection stmtName query mParamTypes =
     enumFromConn connection $ \c ->
         B.useAsCString stmtName $ \s ->
             B.useAsCString query $ \q ->
-                maybeWith withArray mParamTypes $ \o ->
-                    let l = maybe 0 (intToCInt . length) mParamTypes
-                    in c_PQsendPrepare c s q l o
+                maybeWithInt withArrayLen mParamTypes $ \l o ->
+                    c_PQsendPrepare c s q (intToCInt l) o
 
 
 -- | Sends a request to execute a prepared statement with given
