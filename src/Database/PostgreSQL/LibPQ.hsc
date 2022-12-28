@@ -242,12 +242,12 @@ import qualified Data.ByteString as B
 
 import Control.Concurrent.MVar
 
-import Data.Typeable
-
 import Database.PostgreSQL.LibPQ.Compat
 import Database.PostgreSQL.LibPQ.Enums
 import Database.PostgreSQL.LibPQ.Internal
 import Database.PostgreSQL.LibPQ.Marshal
+import Database.PostgreSQL.LibPQ.Notify
+import Database.PostgreSQL.LibPQ.Oid
 
 #if __GLASGOW_HASKELL__ >= 700
 import Control.Exception (mask_)
@@ -698,12 +698,6 @@ connectionUsedPassword connection =
 -- 'Result'.
 newtype Result = Result (ForeignPtr PGresult) deriving (Eq, Show)
 data PGresult
-
-
-newtype Oid = Oid CUInt deriving (Eq, Ord, Read, Show, Storable, Typeable)
-
-invalidOid :: Oid
-invalidOid = Oid (#const InvalidOid)
 
 -- | Convert a list of parameters to the format expected by libpq FFI calls.
 withParams :: [Maybe (Oid, B.ByteString, Format)]
@@ -1739,35 +1733,7 @@ cancel (Cancel fp) =
 -- ordinary SQL commands. The arrival of NOTIFY messages can
 -- subsequently be detected by calling 'notifies'.
 
-data Notify = Notify {
-      notifyRelname :: {-# UNPACK #-} !B.ByteString -- ^ notification channel name
-    , notifyBePid   :: {-# UNPACK #-} !CPid         -- ^ process ID of notifying server process
-    , notifyExtra   :: {-# UNPACK #-} !B.ByteString -- ^ notification payload string
-    } deriving Show
 
-#if __GLASGOW_HASKELL__ < 800
-#let alignment t = "%lu", (unsigned long)offsetof(struct {char x__; t (y__); }, y__)
-#endif
-instance Storable Notify where
-  sizeOf _ = #{size PGnotify}
-
-  alignment _ = #{alignment PGnotify}
-
-  peek ptr = do
-      relname <- B.packCString =<< #{peek PGnotify, relname} ptr
-      extra   <- B.packCString =<< #{peek PGnotify, extra} ptr
-      be_pid  <- fmap f $ #{peek PGnotify, be_pid} ptr
-      return $! Notify relname be_pid extra
-      where
-        f :: CInt -> CPid
-        f = fromIntegral
-
-  poke ptr (Notify a b c) =
-      B.useAsCString a $ \a' ->
-        B.useAsCString c $ \c' ->
-            do #{poke PGnotify, relname} ptr a'
-               #{poke PGnotify, be_pid}  ptr (fromIntegral b :: CInt)
-               #{poke PGnotify, extra}   ptr c'
 
 
 -- | Returns the next notification from a list of unhandled
@@ -1915,8 +1881,6 @@ maybeBsFromForeignPtr fp f =
 
 type NoticeReceiver = NoticeBuffer -> Ptr PGresult -> IO ()
 
-data PGnotice
-
 -- | Upon connection initialization, any notices received from the server are
 --   normally written to the console.  Notices are akin to warnings, and
 --   are distinct from notifications.  This function suppresses notices.
@@ -1954,8 +1918,8 @@ getNotice (Conn _ nbRef) =
         then return Nothing
         else do
           fp <- newForeignPtr finalizerFree (castPtr np)
-          len  <- #{peek PGnotice, len} np
-          return $! Just $! mkPS fp (#offset PGnotice, str) len
+          len  <- pgNoticePeekLen np
+          return $! Just $! mkPS fp pgNoticeOffsetStr (fromIntegral len)
 
 -- $largeobjects
 
