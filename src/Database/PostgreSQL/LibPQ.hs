@@ -37,6 +37,7 @@
 --
 -----------------------------------------------------------------------------
 
+{-# LANGUAGE CPP                        #-}
 {-# LANGUAGE ForeignFunctionInterface   #-}
 {-# LANGUAGE EmptyDataDecls             #-}
 {-# LANGUAGE OverloadedStrings          #-}
@@ -211,10 +212,6 @@ module Database.PostgreSQL.LibPQ
     , loUnlink
     )
 where
-
-#include <libpq-fe.h>
-#include <libpq/libpq-fs.h>
-#include "noticehandlers.h"
 
 import Prelude hiding ( print )
 import Foreign
