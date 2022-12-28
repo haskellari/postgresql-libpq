@@ -65,6 +65,7 @@ library
 
   other-modules:
     Database.PostgreSQL.LibPQ.Compat
+    Database.PostgreSQL.LibPQ.Enums
     Database.PostgreSQL.LibPQ.Marshal
 
   build-depends:
