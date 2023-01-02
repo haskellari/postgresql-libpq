@@ -1,3 +1,8 @@
+0.9.5.0
+-------
+
+- Drop support for GHCs prior 8.6
+
 0.9.4.3
 -------
 

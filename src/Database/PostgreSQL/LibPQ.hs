@@ -43,8 +43,8 @@
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
 {-# LANGUAGE BangPatterns               #-}
+{-# LANGUAGE DerivingStrategies         #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE DeriveDataTypeable         #-}
 
 module Database.PostgreSQL.LibPQ
     (
@@ -213,23 +213,18 @@ module Database.PostgreSQL.LibPQ
     )
 where
 
-import Prelude hiding ( print )
+import Control.Exception (try, IOException, mask_)
 import Foreign
 import Foreign.C.Types
 import Foreign.C.String
-#if __GLASGOW_HASKELL__ >= 702
 import qualified Foreign.ForeignPtr.Unsafe as Unsafe
-#endif
 import qualified Foreign.Concurrent as FC
 import System.Posix.Types ( Fd(..) )
 import System.IO ( IOMode(..), SeekMode(..) )
 
-#if __GLASGOW_HASKELL__ >= 700
 import GHC.Conc ( closeFdWith )  -- Won't work with GHC 7.0.1
-#endif
 import System.Posix.Types ( CPid )
 
-import Data.ByteString.Char8 ()
 import qualified Data.ByteString.Unsafe as B
 import qualified Data.ByteString.Internal as B ( fromForeignPtr
                                                , c_strlen
@@ -246,14 +241,6 @@ import Database.PostgreSQL.LibPQ.Marshal
 import Database.PostgreSQL.LibPQ.Notify
 import Database.PostgreSQL.LibPQ.Oid
 
-#if __GLASGOW_HASKELL__ >= 700
-import Control.Exception (mask_)
-#else
-import qualified Control.Exception
-mask_ = Control.Exception.block
-#endif
-
-import Control.Exception (try, IOException)
 
 #ifndef mingw32_HOST_OS
 import System.Posix.DynamicLinker
@@ -311,7 +298,6 @@ connectStart connStr =
 
 pqfinish :: Ptr PGconn -> MVar NoticeBuffer -> IO ()
 pqfinish conn noticeBuffer = do
-#if __GLASGOW_HASKELL__ >= 700
 --   This covers the case when a connection is closed while other Haskell
 --   threads are using GHC's IO manager to wait on the descriptor.  This is
 --   commonly the case with asynchronous notifications, for example.  Since
@@ -324,9 +310,7 @@ pqfinish conn noticeBuffer = do
            -- This case may be worth investigating further
            c_PQfinish conn
      fd -> closeFdWith (\_ -> c_PQfinish conn) (Fd fd)
-#else
-   c_PQfinish conn
-#endif
+
    nb <- swapMVar noticeBuffer nullPtr
    c_free_noticebuffer nb
 
@@ -350,11 +334,7 @@ newNullConnection = do
 
 -- | Test if a connection is the Null Connection.
 isNullConnection :: Connection -> Bool
-#if __GLASGOW_HASKELL__ >= 702
 isNullConnection (Conn x _) = Unsafe.unsafeForeignPtrToPtr x == nullPtr
-#else
-isNullConnection (Conn x _) = unsafeForeignPtrToPtr x == nullPtr
-#endif
 {-# INLINE isNullConnection #-}
 
 -- | If 'connectStart' succeeds, the next stage is to poll libpq so
@@ -1039,8 +1019,12 @@ nfields :: Result
 nfields res = withResult res (return . toColumn . c_PQnfields)
 
 
-newtype Column = Col CInt  deriving (Eq, Ord, Show, Enum, Num)
-newtype Row    = Row CInt  deriving (Eq, Ord, Show, Enum, Num)
+newtype Column = Col CInt
+  deriving stock (Eq, Ord, Show)
+  deriving newtype (Enum, Num)
+newtype Row    = Row CInt
+  deriving stock (Eq, Ord, Show)
+  deriving newtype (Enum, Num)
 
 toColumn :: (Integral a) => a -> Column
 toColumn = Col . fromIntegral
@@ -2173,13 +2157,8 @@ foreign import ccall unsafe "libpq-fe.h PQsocket"
 foreign import ccall        "libpq-fe.h PQerrorMessage"
     c_PQerrorMessage :: Ptr PGconn -> IO CString
 
-#if __GLASGOW_HASKELL__ >= 700
 foreign import ccall        "libpq-fe.h PQfinish"
     c_PQfinish :: Ptr PGconn -> IO ()
-#else
-foreign import ccall        "libpq-fe.h &PQfinish"
-    p_PQfinish :: FunPtr (Ptr PGconn -> IO ())
-#endif
 
 foreign import ccall        "libpq-fe.h PQreset"
     c_PQreset :: Ptr PGconn -> IO ()
