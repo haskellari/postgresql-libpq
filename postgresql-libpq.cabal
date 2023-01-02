@@ -1,6 +1,6 @@
+cabal-version:      2.4
 name:               postgresql-libpq
-version:            0.9.4.3
-x-revision:         3
+version:            0.9.5.0
 synopsis:           low-level binding to libpq
 description:
   This is a binding to libpq: the C application
@@ -12,7 +12,7 @@ description:
 
 homepage:           https://github.com/haskellari/postgresql-libpq
 bug-reports:        https://github.com/haskellari/postgresql-libpq/issues
-license:            BSD3
+license:            BSD-3-Clause
 license-file:       LICENSE
 author:             Grant Monroe, Leon P Smith, Joey Adams
 maintainer:         Oleg Grenrus <oleg.grenrus@iki.fi>
@@ -23,30 +23,15 @@ copyright:
 category:           Database
 build-type:         Custom
 extra-source-files: cbits/noticehandlers.h
-cabal-version:      >=1.10
 tested-with:
-  GHC ==7.0.4
-   || ==7.2.2
-   || ==7.4.2
-   || ==7.6.3
-   || ==7.8.4
-   || ==7.10.3
-   || ==8.0.2
-   || ==8.2.2
-   || ==8.4.4
-   || ==8.6.5
-   || ==8.8.4
-   || ==8.10.7
-   || ==9.0.2
-   || ==9.2.4
-   || ==9.4.2
+  GHC ==8.6.5 || ==8.8.4 || ==8.10.7 || ==9.0.2 || ==9.2.4 || ==9.4.2
 
 extra-source-files: CHANGELOG.md
 
 custom-setup
   setup-depends:
-      base   >=4.3  && <5
-    , Cabal  >=1.10 && <3.9
+    , base   >=4.12.0.0 && <5
+    , Cabal  >=2.4      && <3.9
 
 -- If true,  use pkg-config,  otherwise use the pg_config based build
 -- configuration
@@ -55,10 +40,10 @@ flag use-pkg-config
   manual:  True
 
 library
-  default-language: Haskell2010
-  hs-source-dirs:   src
-  c-sources:        cbits/noticehandlers.c
-  include-dirs:     cbits
+  default-language:   Haskell2010
+  hs-source-dirs:     src
+  c-sources:          cbits/noticehandlers.c
+  include-dirs:       cbits
   exposed-modules:
     Database.PostgreSQL.LibPQ
     Database.PostgreSQL.LibPQ.Internal
@@ -71,19 +56,19 @@ library
     Database.PostgreSQL.LibPQ.Oid
 
   build-depends:
-      base        >=4.3     && <4.18
-    , bytestring  >=0.9.1.0 && <0.12
+    , base        >=4.12.0.0 && <4.18
+    , bytestring  >=0.10.8.2 && <0.12
 
   if !os(windows)
-    build-depends: unix >=2.4.2.0 && <2.8
+    build-depends: unix >=2.7.2.2 && <2.8
 
   if os(windows)
     build-depends: Win32 >=2.2.0.2 && <2.14
 
-  ghc-options:      -Wall
+  ghc-options:        -Wall
 
   if flag(use-pkg-config)
-    pkgconfig-depends: libpq ==9.3 || >9.3
+    pkgconfig-depends: libpq >=9.3
 
   else
     if os(windows)
@@ -102,8 +87,7 @@ library
           crypto
           ssl
 
-  -- Other-modules:
-  build-tools:      hsc2hs -any
+  build-tool-depends: hsc2hs:hsc2hs >=0.68.5
 
 test-suite smoke
   default-language: Haskell2010
@@ -111,7 +95,7 @@ test-suite smoke
   main-is:          Smoke.hs
   hs-source-dirs:   test
   build-depends:
-      base
+    , base
     , bytestring
     , postgresql-libpq
 

@@ -1,8 +1,4 @@
-{-# LANGUAGE CPP #-}
-
-#ifndef MIN_VERSION_Cabal
-#define MIN_VERSION_Cabal(x,y,z) 0
-#endif
+module Main (main) where
 
 import Distribution.Simple
 import Distribution.Simple.Setup
@@ -16,30 +12,15 @@ import Distribution.Verbosity
 import Data.Char (isSpace)
 import Data.List (dropWhile,reverse)
 
-#if MIN_VERSION_Cabal(2,0,0)
 import Distribution.Types.UnqualComponentName
-#endif
 
 flag :: String -> FlagName
-#if MIN_VERSION_Cabal(2,0,0)
 flag = mkFlagName
-#else
-flag = FlagName
-#endif
 
-#if MIN_VERSION_Cabal(2,0,0)
 unqualComponentName :: String -> UnqualComponentName
 unqualComponentName = mkUnqualComponentName
-#else
-unqualComponentName :: String -> String
-unqualComponentName = id
-#endif
 
-#if !MIN_VERSION_Cabal(2,2,0)
-unFlagAssignment :: [(FlagName, Bool)] -> [(FlagName, Bool)]
-unFlagAssignment = id
-#endif
-
+main :: IO ()
 main = defaultMainWithHooks simpleUserHooks {
   confHook = \pkg flags -> do
     if lookup (flag "use-pkg-config")
