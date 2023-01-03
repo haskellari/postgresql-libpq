@@ -1,6 +1,4 @@
-#include "noticehandlers.h"
-#include <libpq-fe.h>
-#include <stdlib.h>
+#include "hs-libpq.h"
 
 void
 hs_postgresql_libpq_discard_notices(NoticeBuffer* arg, const PGresult* res) {

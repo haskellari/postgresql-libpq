@@ -295,19 +295,23 @@ foreign import ccall unsafe "libpq-fe.h &PQfreemem"
 foreign import ccall unsafe "libpq-fe.h PQfreemem"
     c_PQfreemem :: Ptr a -> IO ()
 
-foreign import ccall unsafe "noticehandlers.h hs_postgresql_libpq_malloc_noticebuffer"
+-------------------------------------------------------------------------------
+-- FFI imports: noticebuffers
+-------------------------------------------------------------------------------
+
+foreign import ccall unsafe "hs-libpq.h hs_postgresql_libpq_malloc_noticebuffer"
     c_malloc_noticebuffer :: IO (Ptr CNoticeBuffer)
 
-foreign import ccall unsafe "noticehandlers.h hs_postgresql_libpq_free_noticebuffer"
+foreign import ccall unsafe "hs-libpq.h hs_postgresql_libpq_free_noticebuffer"
     c_free_noticebuffer :: Ptr CNoticeBuffer -> IO ()
 
-foreign import ccall unsafe "noticehandlers.h hs_postgresql_libpq_get_notice"
+foreign import ccall unsafe "hs-libpq.h hs_postgresql_libpq_get_notice"
     c_get_notice :: Ptr CNoticeBuffer -> IO (Ptr PGnotice)
 
-foreign import ccall unsafe "noticehandlers.h &hs_postgresql_libpq_discard_notices"
+foreign import ccall unsafe "hs-libpq.h &hs_postgresql_libpq_discard_notices"
     p_discard_notices :: FunPtr NoticeReceiver
 
-foreign import ccall unsafe "noticehandlers.h &hs_postgresql_libpq_store_notices"
+foreign import ccall unsafe "hs-libpq.h &hs_postgresql_libpq_store_notices"
     p_store_notices :: FunPtr NoticeReceiver
 
 foreign import ccall unsafe "libpq-fe.h PQsetNoticeReceiver"
