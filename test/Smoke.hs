@@ -9,7 +9,9 @@ import System.Exit (exitFailure)
 import qualified Data.ByteString.Char8 as BS8
 
 main :: IO ()
-main = withConnstring smoke
+main = do
+    libpqVersion >>= print
+    withConnstring smoke
 
 withConnstring :: (BS8.ByteString -> IO ()) -> IO ()
 withConnstring kont = do

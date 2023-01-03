@@ -2,6 +2,7 @@
 -------
 
 - Drop support for GHCs prior 8.6
+- Require libpq >=10.22 (when using pkgconfig).
 
 0.9.4.3
 -------

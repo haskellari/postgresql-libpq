@@ -68,7 +68,7 @@ library
   ghc-options:        -Wall
 
   if flag(use-pkg-config)
-    pkgconfig-depends: libpq >=9.3
+    pkgconfig-depends: libpq >=10.22
 
   else
     if os(windows)
