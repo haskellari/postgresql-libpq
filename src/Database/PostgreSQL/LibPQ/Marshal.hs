@@ -1,7 +1,7 @@
 {-# LANGUAGE CPP #-}
 module Database.PostgreSQL.LibPQ.Marshal where
 
-import Foreign (Ptr,nullPtr,Storable,allocaArray,pokeArray)
+import Foreign (Ptr, Storable, allocaArray, nullPtr, pokeArray)
 
 unsafeWithArray :: Storable a => Int -> [a] -> (Ptr a -> IO b) -> IO b
 unsafeWithArray len vals f =

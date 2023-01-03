@@ -37,14 +37,14 @@
 --
 -----------------------------------------------------------------------------
 
+{-# LANGUAGE BangPatterns               #-}
 {-# LANGUAGE CPP                        #-}
-{-# LANGUAGE ForeignFunctionInterface   #-}
+{-# LANGUAGE DerivingStrategies         #-}
 {-# LANGUAGE EmptyDataDecls             #-}
+{-# LANGUAGE ForeignFunctionInterface   #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
-{-# LANGUAGE BangPatterns               #-}
-{-# LANGUAGE DerivingStrategies         #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 module Database.PostgreSQL.LibPQ
     (
@@ -213,26 +213,31 @@ module Database.PostgreSQL.LibPQ
     )
 where
 
-import Control.Exception (try, IOException, mask_)
-import Foreign
-import Foreign.C.Types
-import Foreign.C.String
+import Control.Concurrent.MVar (MVar, newMVar, swapMVar, tryTakeMVar, withMVar)
+import Control.Exception       (IOException, mask_, try)
+import Data.Word               (Word8)
+import Foreign.C.String        (CString, CStringLen, withCString)
+import Foreign.C.Types         (CChar, CInt (..), CSize (..), CUInt (..))
+import Foreign.ForeignPtr      (ForeignPtr, finalizeForeignPtr, newForeignPtr, newForeignPtr_, touchForeignPtr, withForeignPtr)
+import Foreign.Marshal         (alloca, allocaBytes, finalizerFree, free, mallocBytes, maybeWith, reallocBytes, withArrayLen, withMany)
+import Foreign.Ptr             (FunPtr, Ptr, castPtr, nullPtr)
+import Foreign.Storable        (Storable (peek))
+import GHC.Conc                (closeFdWith)
+import System.IO               (IOMode (..), SeekMode (..))
+import System.Posix.Types      (CPid, Fd (..))
+
+import qualified Data.ByteString           as B
+import qualified Data.ByteString.Internal  as B (c_strlen, createAndTrim, fromForeignPtr)
+import qualified Data.ByteString.Unsafe    as B
+import qualified Foreign.Concurrent        as FC
 import qualified Foreign.ForeignPtr.Unsafe as Unsafe
-import qualified Foreign.Concurrent as FC
-import System.Posix.Types ( Fd(..) )
-import System.IO ( IOMode(..), SeekMode(..) )
 
-import GHC.Conc ( closeFdWith )  -- Won't work with GHC 7.0.1
-import System.Posix.Types ( CPid )
-
-import qualified Data.ByteString.Unsafe as B
-import qualified Data.ByteString.Internal as B ( fromForeignPtr
-                                               , c_strlen
-                                               , createAndTrim
-                                               )
-import qualified Data.ByteString as B
-
-import Control.Concurrent.MVar
+#ifndef mingw32_HOST_OS
+import System.Posix.DynamicLinker (DL (Default), dlsym)
+#else
+import Foreign.Ptr      (castPtrToFunPtr)
+import System.Win32.DLL (getModuleHandle, getProcAddress)
+#endif
 
 import Database.PostgreSQL.LibPQ.Compat
 import Database.PostgreSQL.LibPQ.Enums
@@ -240,13 +245,6 @@ import Database.PostgreSQL.LibPQ.Internal
 import Database.PostgreSQL.LibPQ.Marshal
 import Database.PostgreSQL.LibPQ.Notify
 import Database.PostgreSQL.LibPQ.Oid
-
-
-#ifndef mingw32_HOST_OS
-import System.Posix.DynamicLinker
-#else
-import System.Win32.DLL
-#endif
 
 -- $dbconn
 -- The following functions deal with making a connection to a
