@@ -23,8 +23,7 @@ module Database.PostgreSQL.LibPQ.Internal (
 ) where
 
 import Control.Concurrent.MVar (MVar)
-import Foreign
-
+import Foreign                 (ForeignPtr, Ptr, withForeignPtr)
 
 -- | 'Connection' encapsulates a connection to the backend.
 data Connection = Conn {-# UNPACK #-} !(ForeignPtr PGconn)

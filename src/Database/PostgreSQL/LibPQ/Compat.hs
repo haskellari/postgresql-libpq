@@ -1,10 +1,10 @@
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE CPP       #-}
 {-# LANGUAGE MagicHash #-}
 module Database.PostgreSQL.LibPQ.Compat where
 
-import Data.ByteString.Internal (ByteString(..))
-import Data.Word (Word8)
-import Foreign.ForeignPtr (ForeignPtr)
+import Data.ByteString.Internal (ByteString (..))
+import Data.Word                (Word8)
+import Foreign.ForeignPtr       (ForeignPtr)
 
 #if MIN_VERSION_bytestring(0,11,0)
 import Data.ByteString.Internal (plusForeignPtr)
