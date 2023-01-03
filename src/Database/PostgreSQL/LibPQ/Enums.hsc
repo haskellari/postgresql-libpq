@@ -1,8 +1,6 @@
 module Database.PostgreSQL.LibPQ.Enums where
 
-#include <libpq-fe.h>
-#include <libpq/libpq-fs.h>
-#include "noticehandlers.h"
+#include "hs-libpq.h"
 
 import Data.Bits ((.|.))
 import Data.Maybe (fromMaybe)

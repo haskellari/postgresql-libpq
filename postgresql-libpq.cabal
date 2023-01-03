@@ -22,7 +22,7 @@ copyright:
 
 category:           Database
 build-type:         Custom
-extra-source-files: cbits/noticehandlers.h
+extra-source-files: cbits/hs-libpq.h
 tested-with:
   GHC ==8.6.5 || ==8.8.4 || ==8.10.7 || ==9.0.2 || ==9.2.4 || ==9.4.2
 
@@ -44,6 +44,16 @@ library
   hs-source-dirs:     src
   c-sources:          cbits/noticehandlers.c
   include-dirs:       cbits
+  ghc-options:        -Wall
+  other-extensions:
+    BangPatterns
+    CApiFFI
+    DerivingStrategies
+    EmptyDataDecls
+    GeneralizedNewtypeDeriving
+    OverloadedStrings
+    ScopedTypeVariables
+
   exposed-modules:
     Database.PostgreSQL.LibPQ
     Database.PostgreSQL.LibPQ.Internal
@@ -51,6 +61,7 @@ library
   other-modules:
     Database.PostgreSQL.LibPQ.Compat
     Database.PostgreSQL.LibPQ.Enums
+    Database.PostgreSQL.LibPQ.FFI
     Database.PostgreSQL.LibPQ.Marshal
     Database.PostgreSQL.LibPQ.Notify
     Database.PostgreSQL.LibPQ.Oid
@@ -64,8 +75,6 @@ library
 
   if os(windows)
     build-depends: Win32 >=2.2.0.2 && <2.14
-
-  ghc-options:        -Wall
 
   if flag(use-pkg-config)
     pkgconfig-depends: libpq >=10.22

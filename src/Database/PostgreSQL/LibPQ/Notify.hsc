@@ -1,7 +1,6 @@
 module Database.PostgreSQL.LibPQ.Notify where
 
-#include <libpq-fe.h>
-#include "noticehandlers.h"
+#include "hs-libpq.h"
 
 import Foreign (Ptr, Storable (..))
 import Foreign.C.Types (CInt, CSize)
