@@ -11,7 +11,9 @@ import qualified Data.ByteString.Char8 as BS8
 main :: IO ()
 main = do
     libpqVersion >>= print
-    withConnstring smoke
+    withConnstring $ \connstring -> do
+        smoke connstring
+        testPipeline connstring
 
 withConnstring :: (BS8.ByteString -> IO ()) -> IO ()
 withConnstring kont = do
@@ -54,3 +56,36 @@ smoke connstring = do
     unless (s == ConnectionOk) exitFailure
 
     finish conn
+
+testPipeline :: BS8.ByteString -> IO ()
+testPipeline connstring = do
+    conn <- connectdb connstring
+
+    setnonblocking conn True `shouldReturn` True
+    enterPipelineMode conn `shouldReturn` True
+    pipelineStatus conn `shouldReturn` PipelineOn
+    sendQueryParams conn (BS8.pack "select 1") [] Text `shouldReturn` True
+    sendQueryParams conn (BS8.pack "select 2") [] Text `shouldReturn` True
+    pipelineSync conn `shouldReturn` True
+
+    Just r1 <- getResult conn
+    resultStatus r1 `shouldReturn` TuplesOk
+    getvalue r1 0 0 `shouldReturn` Just (BS8.pack "1")
+    Nothing <- getResult conn
+
+    Just r2 <- getResult conn
+    getvalue r2 0 0 `shouldReturn` Just (BS8.pack "2")
+    Nothing <- getResult conn
+
+    Just r3 <- getResult conn
+    resultStatus r3 `shouldReturn` PipelineSync
+
+    finish conn
+  where
+    shouldBe r value =
+      unless (r == value) $ do
+        print $ "expected " <> show value <> ", got " <> show r
+        exitFailure
+    shouldReturn action value = do
+      r <- action
+      r `shouldBe` value
