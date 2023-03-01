@@ -302,6 +302,21 @@ foreign import capi        "hs-libpq.h &PQfreemem"
 foreign import capi        "hs-libpq.h PQfreemem"
     c_PQfreemem :: Ptr a -> IO ()
 
+foreign import capi        "hs-libpq.h PQpipelineStatus"
+    c_PQpipelineStatus :: Ptr PGconn -> IO CInt
+
+foreign import capi        "hs-libpq.h PQenterPipelineMode"
+    c_PQenterPipelineMode :: Ptr PGconn -> IO CInt
+
+foreign import capi        "hs-libpq.h PQexitPipelineMode"
+    c_PQexitPipelineMode :: Ptr PGconn -> IO CInt
+
+foreign import capi        "hs-libpq.h PQpipelineSync"
+    c_PQpipelineSync :: Ptr PGconn -> IO CInt
+
+foreign import capi        "hs-libpq.h PQsendFlushRequest"
+    c_PQsendFlushRequest :: Ptr PGconn -> IO CInt
+
 -------------------------------------------------------------------------------
 -- FFI imports: noticebuffers
 -------------------------------------------------------------------------------

@@ -1,6 +1,6 @@
 cabal-version:      2.4
 name:               postgresql-libpq
-version:            0.10.2.0
+version:            0.11.0.0
 synopsis:           low-level binding to libpq
 description:
   This is a binding to libpq: the C application
@@ -81,10 +81,10 @@ library
     build-depends: Win32 >=2.2.0.2 && <2.15
 
   if flag(use-pkg-config)
-    build-depends: postgresql-libpq-pkgconfig ^>=0.10
+    build-depends: postgresql-libpq-pkgconfig ^>=0.11
 
   else
-    build-depends: postgresql-libpq-configure ^>=0.10
+    build-depends: postgresql-libpq-configure ^>=0.11
 
   build-tool-depends: hsc2hs:hsc2hs >=0.68.5
 
