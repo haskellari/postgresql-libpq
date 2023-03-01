@@ -37,23 +37,36 @@ data ExecStatus
     | NonfatalError -- ^ A nonfatal error (a notice or
                     -- warning) occurred.
     | FatalError    -- ^ A fatal error occurred.
-    | SingleTuple   -- ^ The PGresult contains a single result tuple
+    | SingleTuple   -- ^ The 'Result' contains a single result tuple
                     -- from the current command. This status occurs
                     -- only when single-row mode has been selected
                     -- for the query.
+    | PipelineSync  -- ^ The 'Result' represents a synchronization
+                    -- point in pipeline mode, requested by
+                    -- 'pipelineSync'. This status occurs only
+                    -- when pipeline mode has been selected.
+    | PipelineAbort -- ^ The 'Result' represents a pipeline that
+                    -- has received an error from the server.
+                    -- 'getResult' must be called repeatedly,
+                    -- and each time it will return this status
+                    -- code until the end of the current pipeline,
+                    -- at which point it will return 'PipelineSync'
+                    -- and normal processing can resume.
   deriving (Eq, Show)
 
 instance FromCInt ExecStatus where
-    fromCInt (#const PGRES_EMPTY_QUERY)    = Just EmptyQuery
-    fromCInt (#const PGRES_COMMAND_OK)     = Just CommandOk
-    fromCInt (#const PGRES_TUPLES_OK)      = Just TuplesOk
-    fromCInt (#const PGRES_COPY_OUT)       = Just CopyOut
-    fromCInt (#const PGRES_COPY_IN)        = Just CopyIn
-    fromCInt (#const PGRES_COPY_BOTH)      = Just CopyBoth
-    fromCInt (#const PGRES_BAD_RESPONSE)   = Just BadResponse
-    fromCInt (#const PGRES_NONFATAL_ERROR) = Just NonfatalError
-    fromCInt (#const PGRES_FATAL_ERROR)    = Just FatalError
-    fromCInt (#const PGRES_SINGLE_TUPLE)   = Just SingleTuple
+    fromCInt (#const PGRES_EMPTY_QUERY)      = Just EmptyQuery
+    fromCInt (#const PGRES_COMMAND_OK)       = Just CommandOk
+    fromCInt (#const PGRES_TUPLES_OK)        = Just TuplesOk
+    fromCInt (#const PGRES_COPY_OUT)         = Just CopyOut
+    fromCInt (#const PGRES_COPY_IN)          = Just CopyIn
+    fromCInt (#const PGRES_COPY_BOTH)        = Just CopyBoth
+    fromCInt (#const PGRES_BAD_RESPONSE)     = Just BadResponse
+    fromCInt (#const PGRES_NONFATAL_ERROR)   = Just NonfatalError
+    fromCInt (#const PGRES_FATAL_ERROR)      = Just FatalError
+    fromCInt (#const PGRES_SINGLE_TUPLE)     = Just SingleTuple
+    fromCInt (#const PGRES_PIPELINE_SYNC)    = Just PipelineSync
+    fromCInt (#const PGRES_PIPELINE_ABORTED) = Just PipelineAbort
     fromCInt _ = Nothing
 
 instance ToCInt ExecStatus where
@@ -67,6 +80,8 @@ instance ToCInt ExecStatus where
     toCInt NonfatalError = (#const PGRES_NONFATAL_ERROR)
     toCInt FatalError    = (#const PGRES_FATAL_ERROR)
     toCInt SingleTuple   = (#const PGRES_SINGLE_TUPLE)
+    toCInt PipelineSync  = (#const PGRES_PIPELINE_SYNC)
+    toCInt PipelineAbort = (#const PGRES_PIPELINE_ABORTED)
 
 
 data FieldCode
@@ -261,6 +276,21 @@ instance ToCInt Format where
 instance FromCInt Format where
     fromCInt 0 = Just Text
     fromCInt 1 = Just Binary
+    fromCInt _ = Nothing
+
+data PipelineStatus
+    = PipelineOn           -- ^ The 'Connection' is in pipeline mode.
+    | PipelineOff          -- ^ The 'Connection' is /not/ in pipeline mode.
+    | PipelineAborted      -- ^ The 'Connection' is in pipeline mode and an error
+                           -- occurred while processing the current pipeline. The
+                           -- aborted flag is cleared when 'getResult' returns a
+                           -- result with status 'PipelineSync'.
+  deriving (Eq, Show)
+
+instance FromCInt PipelineStatus where
+    fromCInt (#const PQ_PIPELINE_ON) = return PipelineOn
+    fromCInt (#const PQ_PIPELINE_OFF) = return PipelineOff
+    fromCInt (#const PQ_PIPELINE_ABORTED) = return PipelineAborted
     fromCInt _ = Nothing
 
 -------------------------------------------------------------------------------

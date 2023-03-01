@@ -171,6 +171,15 @@ module Database.PostgreSQL.LibPQ
     , FlushStatus(..)
     , flush
 
+    -- * Pipeline Mode
+    -- $pipeline
+    , PipelineStatus(..)
+    , pipelineStatus
+    , enterPipelineMode
+    , exitPipelineMode
+    , pipelineSync
+    , sendFlushRequest
+
     -- * Cancelling Queries in Progress
     -- $cancel
     , Cancel
@@ -1622,6 +1631,36 @@ flush connection =
          0 -> return FlushOk
          1 -> return FlushWriting
          _ -> return FlushFailed
+
+
+pipelineStatus :: Connection
+               -> IO PipelineStatus
+pipelineStatus connection = do
+    stat <- withConn connection c_PQpipelineStatus
+    maybe
+      (fail $ "Unknown pipeline status " ++ show stat)
+      return
+      (fromCInt stat)
+
+enterPipelineMode :: Connection
+                  -> IO Bool
+enterPipelineMode connection =
+    enumFromConn connection c_PQenterPipelineMode
+
+exitPipelineMode :: Connection
+                 -> IO Bool
+exitPipelineMode connection =
+    enumFromConn connection c_PQexitPipelineMode
+
+pipelineSync :: Connection
+             -> IO Bool
+pipelineSync connection =
+    enumFromConn connection c_PQpipelineSync
+
+sendFlushRequest :: Connection
+                 -> IO Bool
+sendFlushRequest connection =
+    enumFromConn connection c_PQsendFlushRequest
 
 
 -- $cancel
