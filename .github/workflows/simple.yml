@@ -14,7 +14,7 @@ jobs:
     strategy:
       matrix:
         os: [macos-latest, windows-latest]
-        ghc: ['8.10','9.0','9.2','9.4.4']
+        ghc: ['8.10','9.0','9.2','9.4.4','9.6.1']
       fail-fast: false
     timeout-minutes:
       60
@@ -29,7 +29,7 @@ jobs:
         uses: haskell/actions/setup@v1
         with:
           ghc-version: ${{ matrix.ghc }}
-          cabal-version: '3.8.1.0'
+          cabal-version: '3.10.1.0'
 
       - name: Set up PostgreSQL
         uses: ikalnytskyi/action-setup-postgres@v3
@@ -48,6 +48,13 @@ jobs:
           path: ${{ steps.setup-haskell.outputs.cabal-store }}
           key: ${{ runner.os }}-${{ matrix.ghc }}-${{ github.sha }}
           restore-keys: ${{ runner.os }}-${{ matrix.ghc }}-
+
+      - name: cabal.project.local
+        if: matrix.os == 'windows-latest'
+        run: cp cabal.project.local.win cabal.project.local
+
+      - name: ghc-pkg dump
+        run: ghc-pkg list
 
       - name: Build
         run: cabal build all --enable-tests
