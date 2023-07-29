@@ -1,3 +1,16 @@
+0.10.0.0
+--------
+
+There are technicallly two breaking changes in this release,
+but they shouldn't affect anyone not doing anything weird.
+
+- Binary parameters are passed without copying.
+- FFI functions are imported without `unsafe`. Most uses were incorrect.
+  We make all calls "safe", as checking whether libpq functions do IO
+  or may call a notifier (potentially calling back into Haskell),
+  is virtually impossible for all versions of libpq.
+  (The above properties are not specified in the documentation).
+
 0.9.5.0
 -------
 
