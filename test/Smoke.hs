@@ -1,6 +1,6 @@
 module Main (main) where
 
-import Control.Monad (unless)
+import Control.Monad (unless, when)
 import Database.PostgreSQL.LibPQ
 import Data.Foldable (toList)
 import System.Environment (getEnvironment)
@@ -13,7 +13,7 @@ main = do
     libpqVersion >>= print
     withConnstring $ \connstring -> do
         smoke connstring
-        testPipeline connstring
+        when isEnabledPipeline $ testPipeline connstring
 
 withConnstring :: (BS8.ByteString -> IO ()) -> IO ()
 withConnstring kont = do
@@ -50,7 +50,6 @@ smoke connstring = do
     transactionStatus conn >>= print
     protocolVersion conn   >>= print
     serverVersion conn     >>= print
-    pipelineStatus conn    >>= print
 
     s <- status conn
     unless (s == ConnectionOk) exitFailure
@@ -60,6 +59,8 @@ smoke connstring = do
 testPipeline :: BS8.ByteString -> IO ()
 testPipeline connstring = do
     conn <- connectdb connstring
+
+    pipelineStatus conn    >>= print
 
     setnonblocking conn True `shouldReturn` True
     enterPipelineMode conn `shouldReturn` True

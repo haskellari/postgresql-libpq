@@ -179,6 +179,7 @@ module Database.PostgreSQL.LibPQ
     , exitPipelineMode
     , pipelineSync
     , sendFlushRequest
+    , isEnabledPipeline
 
     -- * Cancelling Queries in Progress
     -- $cancel
@@ -1645,36 +1646,92 @@ flush connection =
          1 -> return FlushWriting
          _ -> return FlushFailed
 
+-- $pipelinemode
+-- These functions control behaviour in pipeline mode.
+--
+-- Pipeline mode allows applications to send a query
+-- without having to read the result of the previously
+-- sent query. Taking advantage of the pipeline mode,
+-- a client will wait less for the server, since multiple
+-- queries/results can be sent/received in
+-- a single network transaction.
 
+ifEnabledPipeline :: IO a -> IO a
+ifEnabledPipeline m =
+    if isEnabledPipeline
+        then m
+        else error "pipeline mode is disabled"
+{-# INLINE ifEnabledPipeline #-}
+
+-- | Returns the current pipeline mode status of the connection.
 pipelineStatus :: Connection
                -> IO PipelineStatus
-pipelineStatus connection = do
+pipelineStatus connection = ifEnabledPipeline $ do
     stat <- withConn connection c_PQpipelineStatus
     maybe
       (fail $ "Unknown pipeline status " ++ show stat)
       return
       (fromCInt stat)
 
+-- | Causes a connection to enter pipeline mode
+-- if it is currently idle or already in pipeline mode.
+--
+-- Returns 'True' for success. Returns 'False' and has no effect
+-- if the connection is not currently idle, i.e.,
+-- it has a result ready, or it is waiting for more
+-- input from the server, etc.
+-- This function does not actually send anything to the server,
+-- it just changes the libpq connection state.
 enterPipelineMode :: Connection
                   -> IO Bool
-enterPipelineMode connection =
+enterPipelineMode connection = ifEnabledPipeline $
     enumFromConn connection c_PQenterPipelineMode
 
+-- | Causes a connection to exit pipeline mode
+-- if it is currently in pipeline mode with
+-- an empty queue and no pending results.
+--
+-- Returns 'True' for success.
+-- Returns 'True' and takes no action if not in pipeline mode.
+-- If the current statement isn't finished processing,
+-- or 'getResult' has not been called to collect results
+-- from all previously sent query, returns True
+-- (in which case, use 'errorMessage' to get more
+-- information about the failure).
 exitPipelineMode :: Connection
                  -> IO Bool
-exitPipelineMode connection =
+exitPipelineMode connection = ifEnabledPipeline $
     enumFromConn connection c_PQexitPipelineMode
 
+-- | Marks a synchronization point in a pipeline by sending
+-- a sync message and flushing the send buffer.
+-- This serves as the delimiter of an implicit transaction
+-- and an error recovery point.
+--
+-- Returns 'True' for success.
+-- Returns 'False' if the connection is not in pipeline mode or
+-- sending a sync message failed.
 pipelineSync :: Connection
              -> IO Bool
-pipelineSync connection =
+pipelineSync connection = ifEnabledPipeline $
     enumFromConn connection c_PQpipelineSync
 
+-- | Sends a request for the server to flush its output buffer.
+--
+-- Returns 'True' for success. Returns 'False' on any failure.
+--
+-- The server flushes its output buffer automatically
+-- as a result of 'pipelineSync' being called,
+-- or on any request when not in pipeline mode;
+-- this function is useful to cause the server to flush
+-- its output buffer in pipeline mode without establishing
+-- a synchronization point.
+-- Note that the request is not itself flushed
+-- to the server automatically; use 'flush' if necessary.
 sendFlushRequest :: Connection
                  -> IO Bool
-sendFlushRequest connection =
+sendFlushRequest connection = ifEnabledPipeline $
     enumFromConn connection c_PQsendFlushRequest
-
 
 -- $cancel
 -- A client application can request cancellation of a command that is
@@ -1762,7 +1819,6 @@ notifies connection =
                      result <- Just `fmap` peek mn
                      c_PQfreemem mn
                      return result
-
 
 -- $control
 -- These functions control miscellaneous details of libpq's behavior.

@@ -65,8 +65,10 @@ instance FromCInt ExecStatus where
     fromCInt (#const PGRES_NONFATAL_ERROR)   = Just NonfatalError
     fromCInt (#const PGRES_FATAL_ERROR)      = Just FatalError
     fromCInt (#const PGRES_SINGLE_TUPLE)     = Just SingleTuple
+    #if HASKELL_LIBPQ_PIPELINE_MODE
     fromCInt (#const PGRES_PIPELINE_SYNC)    = Just PipelineSync
     fromCInt (#const PGRES_PIPELINE_ABORTED) = Just PipelineAbort
+    #endif
     fromCInt _ = Nothing
 
 instance ToCInt ExecStatus where
@@ -80,8 +82,16 @@ instance ToCInt ExecStatus where
     toCInt NonfatalError = (#const PGRES_NONFATAL_ERROR)
     toCInt FatalError    = (#const PGRES_FATAL_ERROR)
     toCInt SingleTuple   = (#const PGRES_SINGLE_TUPLE)
+    #if HASKELL_LIBPQ_PIPELINE_MODE
     toCInt PipelineSync  = (#const PGRES_PIPELINE_SYNC)
+    #else
+    toCInt PipelineSync  = error "pipeline mode is disabled"
+    #endif
+    #if HASKELL_LIBPQ_PIPELINE_MODE
     toCInt PipelineAbort = (#const PGRES_PIPELINE_ABORTED)
+    #else
+    toCInt PipelineSync  = error "pipeline mode is disabled"
+    #endif
 
 
 data FieldCode
@@ -245,7 +255,7 @@ instance FromCInt ConnStatus where
     fromCInt (#const CONNECTION_SSL_STARTUP)       = return ConnectionSSLStartup
     -- fromCInt (#const CONNECTION_NEEDED)         = return ConnectionNeeded
     fromCInt _ = Nothing
-    
+
 
 data TransactionStatus
     = TransIdle    -- ^ currently idle
@@ -288,9 +298,11 @@ data PipelineStatus
   deriving (Eq, Show)
 
 instance FromCInt PipelineStatus where
+    #if HASKELL_LIBPQ_PIPELINE_MODE
     fromCInt (#const PQ_PIPELINE_ON) = return PipelineOn
     fromCInt (#const PQ_PIPELINE_OFF) = return PipelineOff
     fromCInt (#const PQ_PIPELINE_ABORTED) = return PipelineAborted
+    #endif
     fromCInt _ = Nothing
 
 -------------------------------------------------------------------------------

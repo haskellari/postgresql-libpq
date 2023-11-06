@@ -39,6 +39,12 @@ flag use-pkg-config
   default: False
   manual:  True
 
+-- If true,  use libpq bindings for Pipeline Mode,  otherwise throw
+-- errors on usage. It requires libpq >=14
+flag enable-pipeline-mode
+  default: True
+  manual:  False
+
 library
   default-language:   Haskell2010
   hs-source-dirs:     src
@@ -75,6 +81,9 @@ library
 
   if os(windows)
     build-depends: Win32 >=2.2.0.2 && <2.14
+
+  if flag(enable-pipeline-mode)
+    cpp-options: -DHASKELL_LIBPQ_PIPELINE_MODE
 
   if flag(use-pkg-config)
     pkgconfig-depends: libpq >=10.22
