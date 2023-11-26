@@ -25,3 +25,13 @@ mkPS fp off len = BS (plusForeignPtr fp off) len
 mkPS fp off len = PS fp off len
 #endif
 {-# INLINE mkPS #-}
+
+-- | Shows that compiled code was linked with LibPQ supporting Pipeline Mode.
+-- LibPQ version >= 14.
+isEnabledPipeline :: Bool
+#if HASKELL_LIBPQ_PIPELINE_MODE
+isEnabledPipeline = True
+#else
+isEnabledPipeline = False
+#endif
+{-# INLINE isEnabledPipeline #-}
