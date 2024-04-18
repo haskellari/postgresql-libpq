@@ -72,6 +72,7 @@ library
     Database.PostgreSQL.LibPQ.Marshal
     Database.PostgreSQL.LibPQ.Notify
     Database.PostgreSQL.LibPQ.Oid
+    Database.PostgreSQL.LibPQ.Ptr
 
   build-depends:
     , base        >=4.12.0.0 && <4.20

@@ -1,3 +1,8 @@
+0.10.1.0
+--------
+
+- Fix issue with empty binary values (https://github.com/haskellari/postgresql-libpq/issues/54)
+
 0.10.0.0
 --------
 
