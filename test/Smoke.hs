@@ -1,6 +1,8 @@
 module Main (main) where
 
 import Control.Monad (unless)
+import Test.Tasty (defaultMain, testGroup)
+import Test.Tasty.HUnit (testCaseSteps, assertEqual)
 import Database.PostgreSQL.LibPQ
 import Data.Foldable (toList)
 import System.Environment (getEnvironment)
@@ -11,7 +13,9 @@ import qualified Data.ByteString.Char8 as BS8
 main :: IO ()
 main = do
     libpqVersion >>= print
-    withConnstring smoke
+    withConnstring $ \connString -> defaultMain $ testGroup "postgresql-libpq"
+        [ testCaseSteps "smoke" $ \info -> smoke info connString
+        ]
 
 withConnstring :: (BS8.ByteString -> IO ()) -> IO ()
 withConnstring kont = do
@@ -35,21 +39,23 @@ withConnstring kont = do
         , "port=5432"
         ]
 
-smoke :: BS8.ByteString -> IO ()
-smoke connstring = do
+smoke :: (String -> IO ()) -> BS8.ByteString -> IO ()
+smoke info connstring = do
+    let infoShow x = info (show x)
+
     conn <- connectdb connstring
 
     -- status functions
-    db conn                >>= print
-    user conn              >>= print
-    host conn              >>= print
-    port conn              >>= print
-    status conn            >>= print
-    transactionStatus conn >>= print
-    protocolVersion conn   >>= print
-    serverVersion conn     >>= print
+    db conn                >>= infoShow
+    user conn              >>= infoShow
+    host conn              >>= infoShow
+    port conn              >>= infoShow
+    status conn            >>= infoShow
+    transactionStatus conn >>= infoShow
+    protocolVersion conn   >>= infoShow
+    serverVersion conn     >>= infoShow
 
     s <- status conn
-    unless (s == ConnectionOk) exitFailure
+    assertEqual "connection not ok" s ConnectionOk
 
     finish conn
