@@ -238,6 +238,7 @@ import Database.PostgreSQL.LibPQ.Internal
 import Database.PostgreSQL.LibPQ.Marshal
 import Database.PostgreSQL.LibPQ.Notify
 import Database.PostgreSQL.LibPQ.Oid
+import Database.PostgreSQL.LibPQ.Ptr
 
 -- $dbconn
 -- The following functions deal with making a connection to a
@@ -662,10 +663,13 @@ newtype Result = Result (ForeignPtr PGresult) deriving (Eq, Show)
 -- * 'ByteString' uses pinned memory
 -- * the reference to the 'CString' doesn't escape
 unsafeUseParamAsCString :: (B.ByteString, Format) -> (CString -> IO a) -> IO a
-unsafeUseParamAsCString (bs, format) =
+unsafeUseParamAsCString (bs, format) kont =
     case format of
-        Binary -> B.unsafeUseAsCString bs
-        Text   -> B.useAsCString bs
+        Binary -> B.unsafeUseAsCStringLen bs kont'
+        Text   -> B.useAsCString bs kont
+  where
+    kont' (ptr, 0) = if ptr == nullPtr then kont emptyPtr else kont ptr
+    kont' (ptr, _) = kont ptr
 
 -- | Convert a list of parameters to the format expected by libpq FFI calls.
 withParams :: [Maybe (Oid, B.ByteString, Format)]
