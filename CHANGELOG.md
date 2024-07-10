@@ -1,3 +1,13 @@
+0.10.2.0
+--------
+
+- Change `use-pkg-config` default to `True`.
+  Windows and macOS users may need to disable the flag if their
+  libpq installation doesn't provide pkg-config database entry.
+- Split the c library dependency into separate
+  packages, so in `pkg-config` scenario, all packages
+  are `build-type: Simple`.
+
 0.10.1.0
 --------
 

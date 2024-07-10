@@ -1,0 +1,7 @@
+packages: .
+packages: postgresql-libpq-pgconfig
+
+constraints: Win32 installed
+
+package postgresql-libpq
+  flags: -use-pkg-config

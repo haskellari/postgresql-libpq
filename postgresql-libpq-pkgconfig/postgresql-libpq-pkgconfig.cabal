@@ -1,0 +1,43 @@
+cabal-version:      2.4
+name:               postgresql-libpq-pkgconfig
+version:            0.10
+synopsis:           low-level binding to libpq: pkg-config based provider
+description:
+  This is a binding to libpq: the C application
+  programmer's interface to PostgreSQL. libpq is a
+  set of library functions that allow client
+  programs to pass queries to the PostgreSQL
+  backend server and to receive the results of
+  these queries.
+
+homepage:           https://github.com/haskellari/postgresql-libpq
+bug-reports:        https://github.com/haskellari/postgresql-libpq/issues
+license:            BSD-3-Clause
+license-file:       LICENSE
+author:             Grant Monroe, Leon P Smith, Joey Adams
+maintainer:         Oleg Grenrus <oleg.grenrus@iki.fi>
+copyright:          (c) 2024 Oleg Grenrus
+category:           Database
+build-type:         Simple
+tested-with:
+  GHC ==8.6.5
+   || ==8.8.4
+   || ==8.10.7
+   || ==9.0.2
+   || ==9.2.8
+   || ==9.4.8
+   || ==9.6.5
+   || ==9.8.2
+   || ==9.10.1
+
+extra-source-files: CHANGELOG.md
+
+library
+  default-language:  Haskell2010
+  build-depends:     base <5
+  pkgconfig-depends: libpq >=10.22
+
+source-repository head
+  type:     git
+  location: https://github.com/haskellari/postgresql-libpq
+  subdir:   postgresql-libpq-pkgconfig
