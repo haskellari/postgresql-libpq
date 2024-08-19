@@ -1,1 +1,3 @@
 packages: .
+packages: postgresql-libpq-pkgconfig
+packages: postgresql-libpq-configure

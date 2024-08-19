@@ -4,3 +4,6 @@ postgresql:         True
 -- due build-type: Custom
 test-output-direct: False
 haddock-components: libs
+
+constraint-set pkg-config
+  constraints: postgresql-libpq +use-pkg-config

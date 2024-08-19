@@ -1,3 +1,10 @@
+0.10.2.0
+--------
+
+- Split the c library dependency into separate packages.
+  Now the dependencies are either all `build-type: Simple` (`-f +use-pkg-config`)
+  or  `build-type: Configure` (`-f -use-pkg-config`).
+
 0.10.1.0
 --------
 

@@ -1,0 +1,3 @@
+extra-libraries: @POSTGRESQL_EXTRA_LIBS@
+include-dirs:    @POSTGRESQL_INCLUDEDIR@
+extra-lib-dirs:  @POSTGRESQL_LIBDIR@
