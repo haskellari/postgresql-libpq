@@ -1,6 +1,6 @@
 cabal-version:      2.4
 name:               postgresql-libpq-configure
-version:            0.10
+version:            0.10.0.1
 synopsis:           low-level binding to libpq: configure based provider
 description:
   This is a binding to libpq: the C application
