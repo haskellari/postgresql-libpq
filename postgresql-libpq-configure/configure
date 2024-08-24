@@ -3570,7 +3570,7 @@ then :
   ac_cv_POSTGRESQL_LIBS="$POSTGRESQL_LIBS"
 fi
 
-    postgresql_version_req=10.22
+    postgresql_version_req=14.12
     found_postgresql="no"
 
     POSTGRESQL_VERSION=""

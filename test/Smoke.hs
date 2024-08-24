@@ -5,7 +5,6 @@ import Control.Monad             (unless)
 import Data.Foldable             (toList)
 import Database.PostgreSQL.LibPQ
 import System.Environment        (getEnvironment)
-import System.Exit               (exitFailure)
 import Test.Tasty                (defaultMain, testGroup)
 import Test.Tasty.HUnit          (assertEqual, testCaseSteps)
 
@@ -18,6 +17,7 @@ main = do
     withConnstring $ \connString -> defaultMain $ testGroup "postgresql-libpq"
         [ testCaseSteps "smoke" $ smoke connString
         , testCaseSteps "issue54" $ issue54 connString
+        , testCaseSteps "pipeline" $ testPipeline connString
         ]
 
 withConnstring :: (BS8.ByteString -> IO ()) -> IO ()
@@ -57,6 +57,7 @@ smoke connstring info = do
     transactionStatus conn >>= infoShow
     protocolVersion conn   >>= infoShow
     serverVersion conn     >>= infoShow
+    pipelineStatus conn    >>= infoShow
 
     s <- status conn
     assertEqual "connection not ok" ConnectionOk s
@@ -87,3 +88,34 @@ issue54 connString info = do
 
     assertEqual "fst not null" BS.empty val1
     assertEqual "snd not null" BS.empty val2
+
+testPipeline :: BS8.ByteString -> (String -> IO ()) -> IO ()
+testPipeline connstring info = do
+    conn <- connectdb connstring
+
+    setnonblocking conn True `shouldReturn` True
+    enterPipelineMode conn `shouldReturn` True
+    pipelineStatus conn `shouldReturn` PipelineOn
+    sendQueryParams conn (BS8.pack "select 1") [] Text `shouldReturn` True
+    sendQueryParams conn (BS8.pack "select 2") [] Text `shouldReturn` True
+    pipelineSync conn `shouldReturn` True
+
+    Just r1 <- getResult conn
+    resultStatus r1 `shouldReturn` TuplesOk
+    getvalue r1 0 0 `shouldReturn` Just (BS8.pack "1")
+    Nothing <- getResult conn
+
+    Just r2 <- getResult conn
+    getvalue r2 0 0 `shouldReturn` Just (BS8.pack "2")
+    Nothing <- getResult conn
+
+    Just r3 <- getResult conn
+    resultStatus r3 `shouldReturn` PipelineSync
+
+    finish conn
+  where
+    shouldBe r value = assertEqual "shouldBe" r value
+
+    shouldReturn action value = do
+        r <- action
+        r `shouldBe` value

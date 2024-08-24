@@ -171,6 +171,15 @@ module Database.PostgreSQL.LibPQ
     , FlushStatus(..)
     , flush
 
+    -- * Pipeline Mode
+    -- $pipelinemode
+    , PipelineStatus(..)
+    , pipelineStatus
+    , enterPipelineMode
+    , exitPipelineMode
+    , pipelineSync
+    , sendFlushRequest
+
     -- * Cancelling Queries in Progress
     -- $cancel
     , Cancel
@@ -1639,6 +1648,60 @@ flush connection =
          0 -> return FlushOk
          1 -> return FlushWriting
          _ -> return FlushFailed
+
+-- $pipelinemode
+-- These functions control behaviour in pipeline mode.
+--
+-- Pipeline mode allows applications to send a query
+-- without having to read the result of the previously
+-- sent query. Taking advantage of the pipeline mode,
+-- a client will wait less for the server, since multiple
+-- queries/results can be sent/received in
+-- a single network transaction.
+
+-- | Returns the current pipeline mode status of the libpq connection.
+--
+-- @since 0.11.0.0
+pipelineStatus :: Connection
+               -> IO PipelineStatus
+pipelineStatus connection = do
+    stat <- withConn connection c_PQpipelineStatus
+    maybe
+      (fail $ "Unknown pipeline status " ++ show stat)
+      return
+      (fromCInt stat)
+
+-- | Causes a connection to enter pipeline mode if it is currently idle or already in pipeline mode.
+--
+-- @since 0.11.0.0
+enterPipelineMode :: Connection
+                  -> IO Bool
+enterPipelineMode connection =
+    enumFromConn connection c_PQenterPipelineMode
+
+-- | Causes a connection to exit pipeline mode if it is currently in pipeline mode with an empty queue and no pending results.
+--
+-- @since 0.11.0.0
+exitPipelineMode :: Connection
+                 -> IO Bool
+exitPipelineMode connection =
+    enumFromConn connection c_PQexitPipelineMode
+
+-- | Marks a synchronization point in a pipeline by sending a sync message and flushing the send buffer. This serves as the delimiter of an implicit transaction and an error recovery point>
+--
+-- @since 0.11.0.0
+pipelineSync :: Connection
+             -> IO Bool
+pipelineSync connection =
+    enumFromConn connection c_PQpipelineSync
+
+-- | Sends a request for the server to flush its output buffer.
+--
+-- @since 0.11.0.0
+sendFlushRequest :: Connection
+                 -> IO Bool
+sendFlushRequest connection =
+    enumFromConn connection c_PQsendFlushRequest
 
 
 -- $cancel

@@ -1,9 +1,6 @@
 branches:           master
 postgresql:         True
-
--- due build-type: Custom
-test-output-direct: False
-haddock-components: libs
+apt:                libpq-dev
 
 constraint-set pkg-config
   constraints: postgresql-libpq +use-pkg-config
