@@ -1,3 +1,12 @@
+0.11
+----
+
+- Add pipeline mode API
+  https://www.postgresql.org/docs/current/libpq-pipeline-mode.html
+
+  There are new values in `ExecStatus`, therefore the major version release.
+
+
 0.10.2.0
 --------
 
