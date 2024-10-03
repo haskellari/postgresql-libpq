@@ -52,12 +52,15 @@ module Database.PostgreSQL.LibPQ
     -- $dbconn
       Connection
     , connectdb
+    , connectdbParams
     , connectStart
     , connectPoll
     , newNullConnection
     , isNullConnection
-    --, conndefaults
-    --, conninfoParse
+    , ConninfoOption(..)
+    , conndefaults
+    , conninfo
+    , conninfoParse
     , reset
     , resetStart
     , resetPoll
@@ -222,25 +225,30 @@ module Database.PostgreSQL.LibPQ
     )
 where
 
+import Control.Monad           (when)
+import Control.Monad.IO.Class  (MonadIO(liftIO))
 import Control.Concurrent.MVar (MVar, newMVar, swapMVar, tryTakeMVar, withMVar)
 import Control.Exception       (mask_)
+import Foreign.C.ConstPtr      (ConstPtr (..))
 import Foreign.C.String        (CString, CStringLen, withCString)
 import Foreign.C.Types         (CInt (..))
 import Foreign.ForeignPtr      (ForeignPtr, finalizeForeignPtr, newForeignPtr, newForeignPtr_, touchForeignPtr, withForeignPtr)
-import Foreign.Marshal         (alloca, allocaBytes, finalizerFree, free, mallocBytes, maybeWith, reallocBytes, withArrayLen, withMany)
-import Foreign.Ptr             (Ptr, castPtr, nullPtr)
-import Foreign.Storable        (Storable (peek))
+import Foreign.Marshal         (alloca, allocaBytes, finalizerFree, free, mallocBytes, maybeWith, reallocBytes, withArray0, withArrayLen, withMany)
+import Foreign.Ptr             (Ptr, castPtr, nullPtr, plusPtr)
+import Foreign.Storable        (Storable (peek, sizeOf))
 import GHC.Conc                (closeFdWith)
 import System.IO               (IOMode (..), SeekMode (..))
 import System.Posix.Types      (CPid, Fd (..))
 
 import qualified Data.ByteString           as B
+import qualified Data.ByteString.Char8     as B8
 import qualified Data.ByteString.Internal  as B (c_strlen, createAndTrim, fromForeignPtr)
 import qualified Data.ByteString.Unsafe    as B
 import qualified Foreign.Concurrent        as FC
 import qualified Foreign.ForeignPtr.Unsafe as Unsafe
 
 import Database.PostgreSQL.LibPQ.Compat
+import Database.PostgreSQL.LibPQ.Connect
 import Database.PostgreSQL.LibPQ.Enums
 import Database.PostgreSQL.LibPQ.FFI
 import Database.PostgreSQL.LibPQ.Internal
@@ -274,10 +282,49 @@ import Database.PostgreSQL.LibPQ.Ptr
 -- value must be escaped with a backslash, i.e., \' and \\.
 connectdb :: B.ByteString -- ^ Connection Info
           -> IO Connection
-connectdb conninfo =
+connectdb connStr =
     mask_ $ do
-       connPtr <- B.useAsCString conninfo c_PQconnectdb
+       connPtr <- B.useAsCString connStr c_PQconnectdb
        if connPtr == nullPtr
+           then fail "libpq failed to allocate a PGconn structure"
+           else do
+             noticeBuffer <- newMVar nullPtr
+             connection <- newForeignPtrOnce connPtr (pqfinish connPtr noticeBuffer)
+             return $! Conn connection noticeBuffer
+
+-- Include an implementation of the ContT transformer here to avoid a dependency
+-- on transformers.
+newtype ContT r m a = ContT {runContT :: (a -> m r) -> m r}
+
+instance Functor (ContT r m) where
+    fmap f m = ContT $ \c -> runContT m (c . f)
+
+instance (Applicative m) => Applicative (ContT r m) where
+    pure x = ContT ($ x)
+    fm <*> xm = ContT $ \c -> runContT fm (\f -> runContT xm (c . f))
+
+instance (Monad m) => Monad (ContT r m) where
+    return = pure
+    m >>= k  = ContT $ \c -> runContT m (\a -> runContT (k a) c)
+
+instance (MonadIO m) => MonadIO (ContT r m) where
+    liftIO m = ContT (liftIO m >>=)
+
+-- | This function opens a new database connection using the parameters taken
+-- from the list of key word and value pairs.
+connectdbParams :: [(B.ByteString, B.ByteString)] -- ^ Connection Info
+                -> Bool -- ^ Expand database name
+                -> IO Connection
+connectdbParams connOpts expandDBName =
+    mask_ $ flip runContT pure $ do
+       keys <- fmap ConstPtr $ do
+         xs <- mapM (ContT . B.useAsCString) (map fst connOpts)
+         ContT (withArray0 (ConstPtr nullPtr) (fmap ConstPtr xs))
+       values <- fmap ConstPtr $ do
+         xs <- mapM (ContT . B.useAsCString) (map snd connOpts)
+         ContT (withArray0 (ConstPtr nullPtr) (fmap ConstPtr xs))
+       connPtr <- liftIO $ c_PQconnectdbParams keys values (if expandDBName then 1 else 0)
+       liftIO $ if connPtr == nullPtr
            then fail "libpq failed to allocate a PGconn structure"
            else do
              noticeBuffer <- newMVar nullPtr
@@ -356,42 +403,65 @@ connectPoll :: Connection
             -> IO PollingStatus
 connectPoll = pollHelper c_PQconnectPoll
 
+-- | Returns a connection options list. This can be used to determine all
+-- possible 'connectdb' options and their current default values. Note that the
+-- current default values ('conninfoValue' fields) will depend on environment
+-- variables and other context.
+conndefaults :: IO [ConninfoOption]
+conndefaults = do
+    mask_ $ getConnInfos =<< c_PQconndefaults
 
--- PQconndefaults
--- Returns the default connection options.
+-- | Parses a connection string and returns the resulting options as a list.
+-- This can be used to determine the 'connectdb' options in the provided
+-- connection string.
+--
+-- Note that only options explicitly specified in the string will have values
+-- set in the result array; no defaults are inserted.
+conninfoParse :: B.ByteString -- ^ Connection String
+              -> IO [ConninfoOption]
+conninfoParse connStr =
+    mask_ $ flip runContT pure $ do
+        (connPtr :: CString) <- ContT $ B.useAsCString connStr
+        (errmsgPtr :: Ptr CString) <- ContT alloca
+        liftIO $ do
+            p <- c_PQconninfoParse connPtr errmsgPtr
+            -- If errmsg is not NULL, then *errmsg is set to NULL on success,
+            -- else to a malloc'd error string explaining the problem. (It is
+            -- also possible for *errmsg to be set to NULL even when NULL is
+            -- returned; this indicates an out-of-memory situation.)
+            errmsgC <- peek errmsgPtr
+            -- If an error occurs and errmsg is not NULL, be sure to free the
+            -- error string using PQfreemem.
+            when (errmsgC /= nullPtr) $ do
+                errmsg <- B8.unpack <$> B.packCString errmsgC
+                c_PQfreemem errmsgC
+                fail errmsg
+            getConnInfos p
 
--- PQconninfoOption *PQconndefaults(void);
+-- | Returns a connection options list. This can be used to determine all
+-- possible 'connectdb' options and the values that were used to connect to the
+-- server. All notes above for 'conndefaults' also apply to the result of
+-- 'conninfo'.
+conninfo :: Connection -> IO [ConninfoOption]
+conninfo connection = withConn connection $ \pgconn -> do
+    mask_ $ getConnInfos =<< c_PQconninfo pgconn
 
--- typedef struct
--- {
---     char   *keyword;   /* The keyword of the option */
---     char   *envvar;    /* Fallback environment variable name */
---     char   *compiled;  /* Fallback compiled in default value */
---     char   *val;       /* Option's current value, or NULL */
---     char   *label;     /* Label for field in connect dialog */
---     char   *dispchar;  /* Indicates how to display this field
---                           in a connect dialog. Values are:
---                           ""        Display entered value as is
---                           "*"       Password field - hide value
---                           "D"       Debug option - don't show by default */
---     int     dispsize;  /* Field size in characters for dialog */
--- } PQconninfoOption;
--- Returns a connection options array. This can be used to determine all possible PQconnectdb options and their current default values. The return value points to an array of PQconninfoOption structures, which ends with an entry having a null keyword pointer. The null pointer is returned if memory could not be allocated. Note that the current default values (val fields) will depend on environment variables and other context. Callers must treat the connection options data as read-only.
-
--- After processing the options array, free it by passing it to PQconninfoFree. If this is not done, a small amount of memory is leaked for each call to PQconndefaults.
-
--- PQconninfoParse
--- Returns parsed connection options from the provided connection string.
-
--- PQconninfoOption *PQconninfoParse(const char *conninfo, char **errmsg);
--- Parses a connection string and returns the resulting options as an array; or returns NULL if there is a problem with the connection string. This can be used to determine the PQconnectdb options in the provided connection string. The return value points to an array of PQconninfoOption structures, which ends with an entry having a null keyword pointer.
-
--- Note that only options explicitly specified in the string will have values set in the result array; no defaults are inserted.
-
--- If errmsg is not NULL, then *errmsg is set to NULL on success, else to a malloc'd error string explaining the problem. (It is also possible for *errmsg to be set to NULL even when NULL is returned; this indicates an out-of-memory situation.)
-
--- After processing the options array, free it by passing it to PQconninfoFree. If this is not done, some memory is leaked for each call to PQconninfoParse. Conversely, if an error occurs and errmsg is not NULL, be sure to free the error string using PQfreemem.
-
+-- | Marshal from an array pointer to PQconninfoOption to a list of
+-- ConninfoOptions.
+getConnInfos :: Ptr PQconninfoOption -> IO [ConninfoOption]
+getConnInfos ptr =
+    -- After processing the options array, free it by passing it to
+    -- PQconninfoFree. If this is not done, a small amount of memory is leaked
+    -- for each call to PQconndefaults.
+    if ptr == nullPtr then pure [] else go [] ptr <* c_PQconninfoFree ptr
+    where
+        go xs p = do
+            (keyword :: CString) <- peek (plusPtr p pqConninfoOptionKeyword)
+            if keyword == nullPtr
+                then pure (reverse xs)
+                else do
+                    (x :: ConninfoOption) <- peek (castPtr p)
+                    go (x:xs) (plusPtr p (sizeOf x))
 
 -- | Resets the communication channel to the server.
 --
