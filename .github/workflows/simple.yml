@@ -33,7 +33,7 @@ jobs:
           cabal-version: '3.10.2.0'
 
       - name: Set up PostgreSQL
-        uses: ikalnytskyi/action-setup-postgres@v6
+        uses: ikalnytskyi/action-setup-postgres@v7
         id: postgres
         with:
           username: ci
