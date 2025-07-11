@@ -39,7 +39,7 @@ jobs:
           username: ci
           password: sw0rdfish
           database: test
-          postgres-version: "14"
+          postgres-version: "17"
 
       - name: Checkout
         uses: actions/checkout@v4
