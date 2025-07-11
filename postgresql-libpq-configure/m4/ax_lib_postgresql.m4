@@ -206,22 +206,22 @@ AC_DEFUN([AX_LIB_POSTGRESQL],
 	    AC_CHECK_HEADER([libpq-fe.h],[],[found_postgresql=no])
 	    AS_IF([test "X$found_postgresql" = "Xno"],[break])
 	    dnl try now to link
-dnl	    AC_CACHE_CHECK([for the PostgreSQL library linking is working],[ac_cv_postgresql_found],
-dnl	    [
-dnl	      AC_LINK_IFELSE([
-dnl		AC_LANG_PROGRAM(
-dnl		  [
-dnl		   #include <libpq-fe.h>
-dnl		  ],
-dnl		  [[
-dnl		    char conninfo[]="dbname = postgres";
-dnl		    PGconn     *conn;
-dnl		    conn = PQconnectdb(conninfo);
-dnl		  ]]
-dnl		 )
-dnl		],[ac_cv_postgresql_found=yes],
-dnl		  [ac_cv_postgresql_found=no])
-dnl	     ])
+	    AC_CACHE_CHECK([for the PostgreSQL library linking is working],[ac_cv_postgresql_found],
+	    [
+	      AC_LINK_IFELSE([
+		AC_LANG_PROGRAM(
+		  [
+		   #include <libpq-fe.h>
+		  ],
+		  [[
+		    char conninfo[]="dbname = postgres";
+		    PGconn     *conn;
+		    conn = PQconnectdb(conninfo);
+		  ]]
+		 )
+		],[ac_cv_postgresql_found=yes],
+		  [ac_cv_postgresql_found=no])
+	     ])
 	    found_postgresql="$ac_cv_postgresql_found"
 	    AS_IF([test "X$found_postgresql" = "Xno"],[break])
 	    break
