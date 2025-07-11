@@ -46,8 +46,10 @@ jobs:
         shell: bash
         run: |
           ls c:/progra~1/postgr~1/ || true
-          ls /c || true
-          ldd c:/progra~1/postgr~1/*/lib/pq.dll
+          ls c:/progra~1/postgr~1/16 || true
+          ls c:/progra~1/postgr~1/17 || true
+          ls c:/progra~1/postgr~1/16/lib || true
+          ls c:/progra~1/postgr~1/17/lib || true
             
       - name: Checkout
         uses: actions/checkout@v4
