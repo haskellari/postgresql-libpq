@@ -50,6 +50,10 @@ jobs:
           ls c:/progra~1/postgr~1/17 || true
           ls c:/progra~1/postgr~1/16/lib || true
           ls c:/progra~1/postgr~1/17/lib || true
+
+      - name: More debug
+        run:
+          C:\ghcup\ghc\910~1.2\lib/../mingw//bin\clang.exe -o smalltest -IC:/PROGRA~1/POSTGR~1/17/include  -LC:/PROGRA~1/POSTGR~1/17/lib small.c  -lpq
             
       - name: Checkout
         uses: actions/checkout@v4
