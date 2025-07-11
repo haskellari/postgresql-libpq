@@ -1536,6 +1536,7 @@ esac
 eval ac_try_echo="\"\$as_me:${as_lineno-$LINENO}: $ac_try_echo\""
 printf "%s\n" "$ac_try_echo"; } >&5
   echo "$ac_link"
+  echo "$CC -o conftest$ac_exeext $CFLAGS $CPPFLAGS $LDFLAGS conftest.$ac_ext $LIBS"
   (eval "$ac_link") || true
   (eval "$ac_link") 2>conftest.err
   ac_status=$?
