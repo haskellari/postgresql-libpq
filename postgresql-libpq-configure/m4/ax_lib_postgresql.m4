@@ -75,8 +75,7 @@ AC_DEFUN([_AX_LIB_POSTGRESQL_OLD],[
 	  POSTGRESQL_LDFLAGS="$ac_cv_POSTGRESQL_LDFLAGS"
 
 	  AC_CACHE_CHECK([for the PostgreSQL libraries LIBS],[ac_cv_POSTGRESQL_LIBS],
-		       [ac_cv_POSTGRESQL_LIBS="`"$PG_CONFIG" --libs`" || _AX_LIB_POSTGRESQL_OLD_fail=yes])
-	  AS_IF([test "X$_AX_LIB_POSTGRESQL_OLD_fail" = "Xyes"],[break])
+		       [ac_cv_POSTGRESQL_LIBS="-lpq"])
 	  POSTGRESQL_LIBS="$ac_cv_POSTGRESQL_LIBS"
 
 	  AC_CACHE_CHECK([for the PostgreSQL version],[ac_cv_POSTGRESQL_VERSION],
@@ -207,22 +206,22 @@ AC_DEFUN([AX_LIB_POSTGRESQL],
 	    AC_CHECK_HEADER([libpq-fe.h],[],[found_postgresql=no])
 	    AS_IF([test "X$found_postgresql" = "Xno"],[break])
 	    dnl try now to link
-	    AC_CACHE_CHECK([for the PostgreSQL library linking is working],[ac_cv_postgresql_found],
-	    [
-	      AC_LINK_IFELSE([
-		AC_LANG_PROGRAM(
-		  [
-		   #include <libpq-fe.h>
-		  ],
-		  [[
-		    char conninfo[]="dbname = postgres";
-		    PGconn     *conn;
-		    conn = PQconnectdb(conninfo);
-		  ]]
-		 )
-		],[ac_cv_postgresql_found=yes],
-		  [ac_cv_postgresql_found=no])
-	     ])
+dnl	    AC_CACHE_CHECK([for the PostgreSQL library linking is working],[ac_cv_postgresql_found],
+dnl	    [
+dnl	      AC_LINK_IFELSE([
+dnl		AC_LANG_PROGRAM(
+dnl		  [
+dnl		   #include <libpq-fe.h>
+dnl		  ],
+dnl		  [[
+dnl		    char conninfo[]="dbname = postgres";
+dnl		    PGconn     *conn;
+dnl		    conn = PQconnectdb(conninfo);
+dnl		  ]]
+dnl		 )
+dnl		],[ac_cv_postgresql_found=yes],
+dnl		  [ac_cv_postgresql_found=no])
+dnl	     ])
 	    found_postgresql="$ac_cv_postgresql_found"
 	    AS_IF([test "X$found_postgresql" = "Xno"],[break])
 	    break
