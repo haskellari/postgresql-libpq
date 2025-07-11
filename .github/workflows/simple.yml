@@ -15,7 +15,8 @@ jobs:
       matrix:
         os: [macos-latest, windows-latest]
         # Older GHCs need LLVM on macos-latest (ARM)
-        ghc: ['9.2','9.4.8','9.6.6','9.8.2','9.10.1']
+        ghc: ['9.10.2']
+        psql: ['16', '17']
       fail-fast: false
     timeout-minutes:
       60
@@ -33,16 +34,33 @@ jobs:
           cabal-version: '3.10.2.0'
 
       - name: Set up PostgreSQL
-        uses: ikalnytskyi/action-setup-postgres@v6
+        uses: ikalnytskyi/action-setup-postgres@v7
         id: postgres
         with:
           username: ci
           password: sw0rdfish
           database: test
-          postgres-version: "14"
+          postgres-version: ${{ matrix.psql }}
 
+      - name: Debug
+        shell: bash
+        run: |
+          ls c:/progra~1/postgr~1/ || true
+          ls c:/progra~1/postgr~1/16 || true
+          ls c:/progra~1/postgr~1/17 || true
+          ls c:/progra~1/postgr~1/16/lib || true
+          ls c:/progra~1/postgr~1/17/lib || true
+            
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: More debug
+        run:
+          gcc -o smalltest -IC:/PROGRA~1/POSTGR~1/${{ matrix.psql }}/include  -LC:/PROGRA~1/POSTGR~1/${{ matrix.psql }}/lib small.c  -lpq
+
+      - name: More debug
+        run:
+          C:\ghcup\ghc\910~1.2\lib/../mingw//bin\clang.exe -o smalltest -IC:/PROGRA~1/POSTGR~1/${{ matrix.psql }}/include  -LC:/PROGRA~1/POSTGR~1/${{ matrix.psql }}/lib small.c  -lpq
 
       - name: Cache
         uses: actions/cache@v4

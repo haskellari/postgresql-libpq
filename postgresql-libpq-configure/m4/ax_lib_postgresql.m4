@@ -98,6 +98,8 @@ AC_DEFUN([_AX_LIB_POSTGRESQL_OLD],[
 	  ])
 	  AS_IF([test "X$found_postgresql_req_version" = "Xno"],[break])
 
+    $PG_CONFIG
+
 	  found_postgresql="yes"
 	  break
 	done
