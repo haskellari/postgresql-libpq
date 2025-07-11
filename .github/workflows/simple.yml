@@ -45,6 +45,8 @@ jobs:
       - name: Debug
         shell: bash
         run: |
+          ls c:/progra~1/postgr~1/ || true
+          ls /c || true
           ldd c:/progra~1/postgr~1/*/lib/pq.dll
             
       - name: Checkout
