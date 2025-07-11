@@ -16,6 +16,7 @@ jobs:
         os: [macos-latest, windows-latest]
         # Older GHCs need LLVM on macos-latest (ARM)
         ghc: ['9.10.2']
+        psql: ['16', '17']
       fail-fast: false
     timeout-minutes:
       60
@@ -39,7 +40,7 @@ jobs:
           username: ci
           password: sw0rdfish
           database: test
-          postgres-version: "16"
+          postgres-version: ${{ matrix.psql }}
 
       - name: Checkout
         uses: actions/checkout@v4
