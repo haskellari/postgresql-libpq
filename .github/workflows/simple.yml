@@ -42,6 +42,11 @@ jobs:
           database: test
           postgres-version: ${{ matrix.psql }}
 
+      - name: Debug
+        shell: bash
+        run: |
+          ldd c:/progra~1/postgr~1/*/lib/pq.dll
+            
       - name: Checkout
         uses: actions/checkout@v4
 

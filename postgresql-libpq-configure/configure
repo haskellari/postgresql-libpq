@@ -1538,7 +1538,7 @@ printf "%s\n" "$ac_try_echo"; } >&5
   echo "$ac_link"
   echo "$CC -o conftest$ac_exeext $CFLAGS $CPPFLAGS $LDFLAGS conftest.$ac_ext $LIBS"
   ls /dependents C:/PROGRA~1/POSTGR~1/*/lib
-  dumpbin /dependents c:/progra~1/postgr~1/*/lib/pq.dll
+  ldd c:/progra~1/postgr~1/*/lib/pq.dll
   (eval "$ac_link") || true
   (eval "$ac_link") 2>conftest.err
   ac_status=$?
