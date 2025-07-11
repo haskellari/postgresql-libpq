@@ -3911,10 +3911,14 @@ if test ${ac_cv_POSTGRESQL_LIBS+y}
 then :
   printf %s "(cached) " >&6
 else $as_nop
-  ac_cv_POSTGRESQL_LIBS="-lpq"
+  ac_cv_POSTGRESQL_LIBS="`"$PG_CONFIG" --libs`" || _AX_LIB_POSTGRESQL_OLD_fail=yes
 fi
 { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $ac_cv_POSTGRESQL_LIBS" >&5
 printf "%s\n" "$ac_cv_POSTGRESQL_LIBS" >&6; }
+	  if test "X$_AX_LIB_POSTGRESQL_OLD_fail" = "Xyes"
+then :
+  break
+fi
 	  POSTGRESQL_LIBS="$ac_cv_POSTGRESQL_LIBS"
 
 	  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for the PostgreSQL version" >&5
@@ -3986,6 +3990,8 @@ fi
 then :
   break
 fi
+
+    $PG_CONFIG
 
 	  found_postgresql="yes"
 	  break

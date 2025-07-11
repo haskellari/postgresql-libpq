@@ -75,7 +75,8 @@ AC_DEFUN([_AX_LIB_POSTGRESQL_OLD],[
 	  POSTGRESQL_LDFLAGS="$ac_cv_POSTGRESQL_LDFLAGS"
 
 	  AC_CACHE_CHECK([for the PostgreSQL libraries LIBS],[ac_cv_POSTGRESQL_LIBS],
-		       [ac_cv_POSTGRESQL_LIBS="-lpq"])
+		       [ac_cv_POSTGRESQL_LIBS="`"$PG_CONFIG" --libs`" || _AX_LIB_POSTGRESQL_OLD_fail=yes])
+	  AS_IF([test "X$_AX_LIB_POSTGRESQL_OLD_fail" = "Xyes"],[break])
 	  POSTGRESQL_LIBS="$ac_cv_POSTGRESQL_LIBS"
 
 	  AC_CACHE_CHECK([for the PostgreSQL version],[ac_cv_POSTGRESQL_VERSION],
@@ -97,6 +98,8 @@ AC_DEFUN([_AX_LIB_POSTGRESQL_OLD],[
 	     AC_MSG_RESULT([$found_postgresql_req_version])
 	  ])
 	  AS_IF([test "X$found_postgresql_req_version" = "Xno"],[break])
+
+    $PG_CONFIG
 
 	  found_postgresql="yes"
 	  break
