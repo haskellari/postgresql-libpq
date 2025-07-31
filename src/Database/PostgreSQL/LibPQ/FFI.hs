@@ -177,6 +177,9 @@ foreign import capi        "hs-libpq.h PQisnonblocking"
 foreign import capi        "hs-libpq.h PQsetSingleRowMode"
     c_PQsetSingleRowMode :: Ptr PGconn -> IO CInt
 
+foreign import capi        "hs-libpq.h PQsetChunkedRowsMode"
+    c_PQsetChunkedRowsMode :: Ptr PGconn -> CInt -> IO CInt
+
 foreign import capi        "hs-libpq.h PQgetResult"
     c_PQgetResult :: Ptr PGconn -> IO (Ptr PGresult)
 
