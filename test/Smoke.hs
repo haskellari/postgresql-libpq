@@ -114,7 +114,7 @@ testPipeline connstring info = do
 
     finish conn
   where
-    shouldBe r value = assertEqual "shouldBe" r value
+    shouldBe r value = assertEqual "shouldBe" value r
 
     shouldReturn action value = do
         r <- action
