@@ -1620,12 +1620,12 @@ isnonblocking connection = enumFromConn connection c_PQisnonblocking
 
 -- | Select single-row mode for the currently-executing query.
 --
--- This function can only be called immediately after PQsendQuery or one of its
+-- This function can only be called immediately after 'sendQuery' or one of its
 -- sibling functions, before any other operation on the connection such as
--- PQconsumeInput or PQgetResult. If called at the correct time, the function
--- activates single-row mode for the current query and returns 1. Otherwise the
--- mode stays unchanged and the function returns 0. In any case, the mode
--- reverts to normal after completion of the current query.
+-- 'consumeInput' or 'getResult'. If called at the correct time, the function
+-- activates single-row mode for the current query and returns 'True'.
+-- Otherwise the mode stays unchanged and the function returns 'False'. In any
+-- case, the mode reverts to normal after completion of the current query.
 setSingleRowMode :: Connection
                  -> IO Bool
 setSingleRowMode connection = enumFromConn connection c_PQsetSingleRowMode
@@ -1633,14 +1633,14 @@ setSingleRowMode connection = enumFromConn connection c_PQsetSingleRowMode
 
 -- | Select chunked mode for the currently-executing query.
 --
--- This function is similar to 'PQsetSingleRowMode', except that it specifies
+-- This function is similar to 'setSingleRowMode', except that it specifies
 -- retrieval of up to @chunkSize@ rows per 'Result', not necessarily just one
 -- row. This function can only be called immediately after 'sendQuery' or one
 -- of its sibling functions, before any other operation on the connection such
 -- as 'consumeInput' or 'getResult'. If called at the correct time, the
--- function activates chunked mode for the current query and returns 1.
--- Otherwise the mode stays unchanged and the function returns 0. In any case,
--- the mode reverts to normal after completion of the current query.
+-- function activates chunked mode for the current query and returns 'True'.
+-- Otherwise the mode stays unchanged and the function returns 'False'. In any
+-- case, the mode reverts to normal after completion of the current query.
 setChunkedRowsMode :: Connection
                    -> Int
                    -> IO Bool
