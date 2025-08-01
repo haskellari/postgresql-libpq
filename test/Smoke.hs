@@ -18,6 +18,7 @@ main = do
         [ testCaseSteps "smoke" $ smoke connString
         , testCaseSteps "issue54" $ issue54 connString
         , testCaseSteps "pipeline" $ testPipeline connString
+        , testCaseSteps "rowmodes" $ testRowModes connString
         ]
 
 withConnstring :: (BS8.ByteString -> IO ()) -> IO ()
@@ -119,3 +120,38 @@ testPipeline connstring info = do
     shouldReturn action value = do
         r <- action
         r `shouldBe` value
+
+testRowModes :: BS8.ByteString -> (String -> IO ()) -> IO ()
+testRowModes connstring info = do
+    conn <- connectdb connstring
+
+    let q = sendQuery conn (BS8.pack "select * from (values (1), (2), (3))") >>= assertEqual "sendQuery" True
+
+    do q
+       Just r1 <- getResult conn
+       ntuples r1 >>= assertEqual "no row mode" 3
+       getResult conn >>= assertEqual "no row mode/end" Nothing
+
+    do q
+       setSingleRowMode conn >>= assertEqual "setSingleRowMode" True
+       Just r1 <- getResult conn
+       ntuples r1 >>= assertEqual "singlerow 1" 1
+       Just r2 <- getResult conn
+       ntuples r2 >>= assertEqual "singlerow 2" 1
+       Just r3 <- getResult conn
+       ntuples r3 >>= assertEqual "singlerow 3" 1
+       Just r4 <- getResult conn
+       ntuples r4 >>= assertEqual "singlerow eof" 0
+       getResult conn >>= assertEqual "singlerow end" Nothing
+
+    do q
+       setChunkedRowsMode conn 2 >>= assertEqual "setChunkedRowsMode" True
+       Just r1 <- getResult conn
+       ntuples r1 >>= assertEqual "chunkedrow 1" 2
+       Just r2 <- getResult conn
+       ntuples r2 >>= assertEqual "chunkedrow 2" 1
+       Just r3 <- getResult conn
+       ntuples r3 >>= assertEqual "chunkedrow eof" 0
+       getResult conn >>= assertEqual "chunkedrow end" Nothing
+
+    finish conn
