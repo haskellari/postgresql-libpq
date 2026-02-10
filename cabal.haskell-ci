@@ -2,5 +2,7 @@ branches:           master
 postgresql:         True
 apt:                libpq-dev
 
+error-unused-packages: False
+
 constraint-set pkg-config
   constraints: postgresql-libpq +use-pkg-config
