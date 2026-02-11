@@ -197,12 +197,14 @@ data Verbosity
     = ErrorsTerse
     | ErrorsDefault
     | ErrorsVerbose
+    | ErrorsSqlstate
   deriving (Eq, Show)
 
 instance FromCInt Verbosity where
-    fromCInt (#const PQERRORS_TERSE)   = Just ErrorsTerse
-    fromCInt (#const PQERRORS_DEFAULT) = Just ErrorsDefault
-    fromCInt (#const PQERRORS_VERBOSE) = Just ErrorsVerbose
+    fromCInt (#const PQERRORS_TERSE)    = Just ErrorsTerse
+    fromCInt (#const PQERRORS_DEFAULT)  = Just ErrorsDefault
+    fromCInt (#const PQERRORS_VERBOSE)  = Just ErrorsVerbose
+    fromCInt (#const PQERRORS_SQLSTATE) = Just ErrorsSqlstate
     fromCInt _ = Nothing
 
 instance ToCInt Verbosity where
