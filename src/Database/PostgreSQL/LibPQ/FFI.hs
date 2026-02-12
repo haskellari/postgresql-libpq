@@ -118,7 +118,7 @@ foreign import capi        "hs-libpq.h PQputCopyData"
 
 foreign import capi        "hs-libpq.h PQputCopyEnd"
     c_PQputCopyEnd :: Ptr PGconn -> CString -> IO CInt
- 
+
 -- TODO: GHC #22043
 foreign import ccall       "hs-libpq.h PQgetCopyData"
     c_PQgetCopyData :: Ptr PGconn -> Ptr (Ptr Word8) -> CInt -> IO CInt
@@ -176,6 +176,9 @@ foreign import capi        "hs-libpq.h PQisnonblocking"
 
 foreign import capi        "hs-libpq.h PQsetSingleRowMode"
     c_PQsetSingleRowMode :: Ptr PGconn -> IO CInt
+
+foreign import capi        "hs-libpq.h PQsetChunkedRowsMode"
+    c_PQsetChunkedRowsMode :: Ptr PGconn -> CInt -> IO CInt
 
 foreign import capi        "hs-libpq.h PQgetResult"
     c_PQgetResult :: Ptr PGconn -> IO (Ptr PGresult)
