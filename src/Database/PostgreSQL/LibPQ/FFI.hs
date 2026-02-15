@@ -2,11 +2,13 @@
 {-# LANGUAGE EmptyDataDecls #-}
 module Database.PostgreSQL.LibPQ.FFI where
 
-import Data.Word        (Word8)
-import Foreign.C.String (CString)
-import Foreign.C.Types  (CChar, CInt (..), CSize (..), CUInt (..))
-import Foreign.Ptr      (FunPtr, Ptr)
+import Data.Word          (Word8)
+import Foreign.C.ConstPtr (ConstPtr(..))
+import Foreign.C.String   (CString)
+import Foreign.C.Types    (CChar, CInt (..), CSize (..), CUInt (..))
+import Foreign.Ptr        (FunPtr, Ptr)
 
+import Database.PostgreSQL.LibPQ.Connect  (PQconninfoOption)
 import Database.PostgreSQL.LibPQ.Internal (CNoticeBuffer, NoticeBuffer, PGconn)
 import Database.PostgreSQL.LibPQ.Notify   (Notify, PGnotice)
 import Database.PostgreSQL.LibPQ.Oid      (Oid (..))
@@ -28,6 +30,9 @@ type NoticeReceiver = NoticeBuffer -> Ptr PGresult -> IO ()
 
 foreign import capi        "hs-libpq.h PQconnectdb"
     c_PQconnectdb :: CString -> IO (Ptr PGconn)
+
+foreign import capi        "hs-libpq.h PQconnectdbParams"
+    c_PQconnectdbParams :: ConstPtr (ConstPtr CChar) -> ConstPtr (ConstPtr CChar) -> CInt -> IO (Ptr PGconn)
 
 foreign import capi        "hs-libpq.h PQconnectStart"
     c_PQconnectStart :: CString -> IO (Ptr PGconn)
@@ -87,6 +92,18 @@ foreign import capi        "hs-libpq.h PQsocket"
 foreign import capi        "hs-libpq.h PQerrorMessage"
     c_PQerrorMessage :: Ptr PGconn -> IO CString
 
+foreign import capi        "hs-libpq.h PQconndefaults"
+    c_PQconndefaults :: IO (Ptr PQconninfoOption)
+
+foreign import capi        "hs-libpq.h PQconninfo"
+    c_PQconninfo :: Ptr PGconn -> IO (Ptr PQconninfoOption)
+
+foreign import capi        "hs-libpq.h PQconninfoParse"
+    c_PQconninfoParse :: CString -> Ptr (Ptr CChar) -> IO (Ptr PQconninfoOption)
+
+foreign import capi        "hs-libpq.h PQconninfoFree"
+    c_PQconninfoFree :: Ptr PQconninfoOption -> IO ()
+
 foreign import capi        "hs-libpq.h PQfinish"
     c_PQfinish :: Ptr PGconn -> IO ()
 
@@ -118,7 +135,7 @@ foreign import capi        "hs-libpq.h PQputCopyData"
 
 foreign import capi        "hs-libpq.h PQputCopyEnd"
     c_PQputCopyEnd :: Ptr PGconn -> CString -> IO CInt
- 
+
 -- TODO: GHC #22043
 foreign import ccall       "hs-libpq.h PQgetCopyData"
     c_PQgetCopyData :: Ptr PGconn -> Ptr (Ptr Word8) -> CInt -> IO CInt
